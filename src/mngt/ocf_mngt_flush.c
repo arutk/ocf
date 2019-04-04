@@ -18,8 +18,8 @@
 #include "../utils/utils_req.h"
 #include "../ocf_def_priv.h"
 
-struct ocf_mngt_cache_flush_context;
-typedef void (*ocf_flush_complete_t)(struct ocf_mngt_cache_flush_context *, int);
+struct ocf_mngt_flush_common_context;
+typedef void (*ocf_flush_complete_t)(struct ocf_mngt_flush_common_context *, int);
 
 struct flush_containers_context
 {
@@ -38,56 +38,69 @@ struct flush_containers_context
 };
 
 /* common struct for cache/core flush/purge pipeline priv */
-struct ocf_mngt_cache_flush_context
+struct ocf_mngt_flush_common_context
 {
 	/* pipeline for flush / purge */
 	ocf_pipeline_t pipeline;
 	/* target cache */
 	ocf_cache_t cache;
-	/* target core */
-	ocf_core_t core;
 	/* true if flush interrupt respected */
 	bool allow_interruption;
-
-	/* management operation identifier */
-	enum {
-		flush_cache = 0,
-		flush_core,
-		purge_cache,
-		purge_core
-	} op;
-
-	/* ocf mngmt entry point completion */
-	union {
-		ocf_mngt_cache_flush_end_t flush_cache;
-		ocf_mngt_core_flush_end_t flush_core;
-		ocf_mngt_cache_purge_end_t purge_cache;
-		ocf_mngt_core_purge_end_t purge_core;
-	} cmpl;
-
+	/* true for purge cache/core pipelines */
+	bool purge;
 	/* completion pivate data */
 	void *priv;
-
-	/* purge parameters */
-	struct {
-		uint64_t end_byte;
-		uint64_t core_id;
-	} purge;
-
 	/* context for flush containers logic */
 	struct flush_containers_context fcs;
 };
 
+/* cache flush context */
+struct ocf_mngt_cache_flush_context {
+	/* common context must be the first member */
+	struct ocf_mngt_flush_common_context common;
+	ocf_mngt_cache_flush_end_t end;
+};
+
+/* core flush context */
+struct ocf_mngt_core_flush_context {
+	/* common context must be the first member */
+	struct ocf_mngt_flush_common_context common;
+	/* target core */
+	ocf_core_t core;
+	/* completion callback */
+	ocf_mngt_core_flush_end_t end;
+};
+
+/* cache purge context */
+struct ocf_mngt_cache_purge_context {
+	/* common context must be the first member */
+	struct ocf_mngt_flush_common_context common;
+	/* completion callback */
+	ocf_mngt_cache_purge_end_t end;
+};
+
+/* core purge context */
+struct ocf_mngt_core_purge_context {
+	/* common context must be the first member */
+	struct ocf_mngt_flush_common_context common;
+	/* target core */
+	ocf_core_t core;
+	/* purge last byte */
+	uint64_t core_size;
+	/* completion callback */
+	ocf_mngt_core_purge_end_t end;
+};
+
 static void _ocf_mngt_begin_flush_complete(void *priv)
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_flush_common_context *context = priv;
 	ocf_pipeline_next(context->pipeline);
 }
 
 static void _ocf_mngt_begin_flush(ocf_pipeline_t pipeline, void *priv,
 		ocf_pipeline_arg_t arg)
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_flush_common_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
 	/* FIXME: need mechanism for async waiting for outstanding flushes to
@@ -351,7 +364,7 @@ static void _ocf_mngt_flush_portion(struct flush_container *fc)
 static void _ocf_mngt_flush_portion_end(void *private_data, int error)
 {
 	struct flush_container *fc = private_data;
-	struct ocf_mngt_cache_flush_context *context = fc->context;
+	struct ocf_mngt_flush_common_context *context = fc->context;
 	struct flush_containers_context *fsc = &context->fcs;
 	ocf_cache_t cache = context->cache;
 	ocf_core_t core = &cache->core[fc->core_id];
@@ -409,7 +422,7 @@ static const struct ocf_io_if _io_if_flush_portion = {
 };
 
 static void _ocf_mngt_flush_container(
-		struct ocf_mngt_cache_flush_context *context,
+		struct ocf_mngt_flush_common_context *context,
 		struct flush_container *fc, ocf_flush_containter_coplete_t end)
 {
 	ocf_cache_t cache = context->cache;
@@ -452,7 +465,7 @@ finish:
 
 void _ocf_flush_container_complete(void *ctx)
 {
-	struct ocf_mngt_cache_flush_context *context = ctx;
+	struct ocf_mngt_flush_common_context *context = ctx;
 
 	if (env_atomic_dec_return(&context->fcs.count)) {
 		return;
@@ -466,7 +479,7 @@ void _ocf_flush_container_complete(void *ctx)
 }
 
 static void _ocf_mngt_flush_containers(
-		struct ocf_mngt_cache_flush_context *context,
+		struct ocf_mngt_flush_common_context *context,
 		struct flush_container *fctbl,
 		uint32_t fcnum, ocf_flush_complete_t complete)
 {
@@ -496,12 +509,13 @@ static void _ocf_mngt_flush_containers(
 }
 
 
-static void _ocf_mngt_flush_core(
-	struct ocf_mngt_cache_flush_context *context,
+static void _ocf_mngt_core_flush(
+	struct ocf_mngt_core_flush_context *core_flush,
 	ocf_flush_complete_t complete)
 {
+	struct ocf_mngt_flush_common_context *context = &core_flush->common;
 	ocf_cache_t cache = context->cache;
-	ocf_core_t core = context->core;
+	ocf_core_t core = core_flush->core;
 	ocf_core_id_t core_id = ocf_core_get_id(core);
 	struct flush_container *fc;
 	int ret;
@@ -533,7 +547,7 @@ static void _ocf_mngt_flush_core(
 }
 
 static void _ocf_mngt_flush_all_cores(
-	struct ocf_mngt_cache_flush_context *context,
+	struct ocf_mngt_flush_common_context *context,
 	ocf_flush_complete_t complete)
 {
 	ocf_cache_t cache = context->cache;
@@ -541,9 +555,9 @@ static void _ocf_mngt_flush_all_cores(
 	uint32_t fcnum = 0;
 	int ret;
 
-	if (context->op == flush_cache)
+	if (!context->purge)
 		ocf_cache_log(cache, log_info, "Flushing cache\n");
-	else if (context->op == purge_cache)
+	else
 		ocf_cache_log(cache, log_info, "Purging cache\n");
 
 	env_atomic_set(&cache->flush_in_progress, 1);
@@ -565,7 +579,7 @@ static void _ocf_mngt_flush_all_cores(
 }
 
 static void _ocf_mngt_flush_all_cores_complete(
-		struct ocf_mngt_cache_flush_context *context, int error)
+		struct ocf_mngt_flush_common_context *context, int error)
 {
 	ocf_cache_t cache = context->cache;
 	uint32_t i, j;
@@ -587,7 +601,7 @@ static void _ocf_mngt_flush_all_cores_complete(
 		return;
 	}
 
-	if (context->op == flush_cache)
+	if (!context->purge)
 		ocf_cache_log(cache, log_info, "Flushing cache completed\n");
 
 	ocf_pipeline_next(context->pipeline);
@@ -599,59 +613,73 @@ static void _ocf_mngt_flush_all_cores_complete(
 static void _ocf_mngt_cache_flush(ocf_pipeline_t pipeline, void *priv,
 		ocf_pipeline_arg_t arg)
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_flush_common_context *context = priv;
 	context->cache->flushing_interrupted = 0;
 	_ocf_mngt_flush_all_cores(context, _ocf_mngt_flush_all_cores_complete);
 }
 
-static void _ocf_mngt_flush_finish(ocf_pipeline_t pipeline, void *priv,
+static void _ocf_mngt_cache_flush_finish(ocf_pipeline_t pipeline, void *priv,
 		int error)
-
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_cache_flush_context *cache_flush = priv;
+	struct ocf_mngt_flush_common_context *context = &cache_flush->common;
 	ocf_cache_t cache = context->cache;
-	int64_t core_id;
 
-	if (!error) {
-		switch(context->op) {
-		case flush_cache:
-		case purge_cache:
-			ENV_BUG_ON(ocf_mngt_cache_is_dirty(cache));
-			break;
-		case flush_core:
-		case purge_core:
-			core_id = ocf_core_get_id(context->core);
-			ENV_BUG_ON(env_atomic_read(&cache->core_runtime_meta
-					[core_id].dirty_clines));
-			break;
-		}
-	}
+	ENV_BUG_ON(!error && ocf_mngt_cache_is_dirty(cache));
+	_ocf_mngt_end_flush(cache);
+	cache_flush->end(cache, context->priv, error);
+	ocf_pipeline_destroy(context->pipeline);
+}
 
-	_ocf_mngt_end_flush(context->cache);
+static void _ocf_mngt_core_flush_finish(ocf_pipeline_t pipeline, void *priv,
+		int error)
+{
+	struct ocf_mngt_core_flush_context *core_flush = priv;
+	struct ocf_mngt_flush_common_context *context = &core_flush->common;
+	ocf_cache_t cache = context->cache;
+	ocf_core_t core = core_flush->core;
+	int64_t core_id = ocf_core_get_id(core);
 
-	switch (context->op) {
-	case flush_cache:
-		context->cmpl.flush_cache(context->cache, context->priv, error);
-		break;
-	case flush_core:
-		context->cmpl.flush_core(context->core, context->priv, error);
-		break;
-	case purge_cache:
-		context->cmpl.purge_cache(context->cache, context->priv, error);
-		break;
-	case purge_core:
-		context->cmpl.purge_core(context->core, context->priv, error);
-		break;
-	default:
-		ENV_BUG();
-	}
+	ENV_BUG_ON(!error && env_atomic_read(&cache->core_runtime_meta[core_id].
+			dirty_clines));
+	_ocf_mngt_end_flush(cache);
+	core_flush->end(core, context->priv, error);
+	ocf_pipeline_destroy(context->pipeline);
+}
 
+static void _ocf_mngt_cache_purge_finish(ocf_pipeline_t pipeline, void *priv,
+		int error)
+{
+	struct ocf_mngt_cache_purge_context *cache_purge = priv;
+	struct ocf_mngt_flush_common_context *context = &cache_purge->common;
+
+	ocf_cache_t cache = context->cache;
+
+	ENV_BUG_ON(!error && ocf_mngt_cache_is_dirty(cache));
+	_ocf_mngt_end_flush(cache);
+	cache_purge->end(cache, context->priv, error);
+	ocf_pipeline_destroy(context->pipeline);
+}
+
+static void _ocf_mngt_core_purge_finish(ocf_pipeline_t pipeline, void *priv,
+		int error)
+{
+	struct ocf_mngt_core_purge_context *core_purge = priv;
+	struct ocf_mngt_flush_common_context *context = &core_purge->common;
+	ocf_cache_t cache = context->cache;
+	ocf_core_t core = core_purge->core;
+	int64_t core_id = ocf_core_get_id(core);
+
+	ENV_BUG_ON(!error && env_atomic_read(&cache->core_runtime_meta[core_id].
+			dirty_clines));
+	_ocf_mngt_end_flush(cache);
+	core_purge->end(core, context->priv, error);
 	ocf_pipeline_destroy(context->pipeline);
 }
 
 static struct ocf_pipeline_properties _ocf_mngt_cache_flush_pipeline_properties = {
 	.priv_size = sizeof(struct ocf_mngt_cache_flush_context),
-	.finish = _ocf_mngt_flush_finish,
+	.finish = _ocf_mngt_cache_flush_finish,
 	.steps = {
 		OCF_PL_STEP(_ocf_mngt_begin_flush),
 		OCF_PL_STEP(_ocf_mngt_cache_flush),
@@ -663,7 +691,8 @@ void ocf_mngt_cache_flush(ocf_cache_t cache, bool interruption,
 		ocf_mngt_cache_flush_end_t cmpl, void *priv)
 {
 	ocf_pipeline_t pipeline;
-	struct ocf_mngt_cache_flush_context *context;
+	struct ocf_mngt_flush_common_context *context;
+	struct ocf_mngt_cache_flush_context *cache_flush;
 	int result = 0;
 
 	OCF_CHECK_NULL(cache);
@@ -695,23 +724,28 @@ void ocf_mngt_cache_flush(ocf_cache_t cache, bool interruption,
 		cmpl(cache, priv, -OCF_ERR_NO_MEM);
 		return;
 	}
-	context = ocf_pipeline_get_priv(pipeline);
+	cache_flush = ocf_pipeline_get_priv(pipeline);
+	context = &cache_flush->common;
 
 	context->pipeline = pipeline;
-	context->cmpl.flush_cache = cmpl;
 	context->priv = priv;
 	context->cache = cache;
 	context->allow_interruption = interruption;
-	context->op = flush_cache;
+	context->purge = false;
+	cache_flush->end = cmpl;
 
 	ocf_pipeline_next(context->pipeline);
 }
 
-static void _ocf_mngt_flush_core_complete(
-		struct ocf_mngt_cache_flush_context *context, int error)
+static void _ocf_mngt_core_flush_complete(
+		struct ocf_mngt_flush_common_context *context, int error)
 {
+	/* 'downcast' generic context structure to core flush context */
+	struct ocf_mngt_core_flush_context *core_flush =
+			(struct ocf_mngt_core_flush_context *)context;
+
 	ocf_cache_t cache = context->cache;
-	ocf_core_t core = context->core;
+	ocf_core_t core = core_flush->core;
 
 	env_atomic_set(&core->flushed, 0);
 
@@ -720,33 +754,34 @@ static void _ocf_mngt_flush_core_complete(
 		return;
 	}
 
-	if (context->op == flush_core)
+	if (!context->purge)
 		ocf_cache_log(cache, log_info, "Flushing completed\n");
 
 	ocf_pipeline_next(context->pipeline);
 }
 
-static void _ocf_mngt_core_flush(ocf_pipeline_t pipeline, void *priv,
+static void _ocf_mngt_core_flush_step(ocf_pipeline_t pipeline, void *priv,
 		ocf_pipeline_arg_t arg)
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_core_flush_context *core_flush = priv;
+	struct ocf_mngt_flush_common_context *context = &core_flush->common;
 	ocf_cache_t cache = context->cache;
 
-	if (context->op == flush_core)
+	if (!context->purge)
 		ocf_cache_log(cache, log_info, "Flushing core\n");
-	else if (context->op == purge_core)
+	else
 		ocf_cache_log(cache, log_info, "Purging core\n");
 
-	_ocf_mngt_flush_core(context, _ocf_mngt_flush_core_complete);
+	_ocf_mngt_core_flush(core_flush, _ocf_mngt_core_flush_complete);
 }
 
 static
 struct ocf_pipeline_properties _ocf_mngt_core_flush_pipeline_properties = {
-	.priv_size = sizeof(struct ocf_mngt_cache_flush_context),
-	.finish = _ocf_mngt_flush_finish,
+	.priv_size = sizeof(struct ocf_mngt_core_flush_context),
+	.finish = _ocf_mngt_core_flush_finish,
 	.steps = {
 		OCF_PL_STEP(_ocf_mngt_begin_flush),
-		OCF_PL_STEP(_ocf_mngt_core_flush),
+		OCF_PL_STEP(_ocf_mngt_core_flush_step),
 		OCF_PL_STEP_TERMINATOR(),
 	},
 };
@@ -755,7 +790,8 @@ void ocf_mngt_core_flush(ocf_core_t core, bool interruption,
 		ocf_mngt_core_flush_end_t cmpl, void *priv)
 {
 	ocf_pipeline_t pipeline;
-	struct ocf_mngt_cache_flush_context *context;
+	struct ocf_mngt_flush_common_context *context;
+	struct ocf_mngt_core_flush_context *core_flush;
 	ocf_cache_t cache;
 	int result;
 
@@ -790,15 +826,16 @@ void ocf_mngt_core_flush(ocf_core_t core, bool interruption,
 		cmpl(core, priv, -OCF_ERR_NO_MEM);
 		return;
 	}
-	context = ocf_pipeline_get_priv(pipeline);
+	core_flush = ocf_pipeline_get_priv(pipeline);
+	context = &core_flush->common;
 
 	context->pipeline = pipeline;
-	context->cmpl.flush_core = cmpl;
 	context->priv = priv;
 	context->cache = cache;
 	context->allow_interruption = interruption;
-	context->op = flush_core;
-	context->core = core;
+	context->purge = false;
+	core_flush->core = core;
+	core_flush->end = cmpl;
 
 	ocf_pipeline_next(context->pipeline);
 }
@@ -806,13 +843,14 @@ void ocf_mngt_core_flush(ocf_core_t core, bool interruption,
 static void _ocf_mngt_cache_invalidate(ocf_pipeline_t pipeline, void *priv,
 		ocf_pipeline_arg_t arg)
 {
-	struct ocf_mngt_cache_flush_context *context = priv;
+	struct ocf_mngt_cache_purge_context *cache_purge = priv;
+	struct ocf_mngt_flush_common_context *context = &cache_purge->common;
 	ocf_cache_t cache = context->cache;
 	int result;
 
 	OCF_METADATA_LOCK_WR();
-	result = ocf_metadata_sparse_range(cache, context->purge.core_id, 0,
-			context->purge.end_byte);
+	result = ocf_metadata_sparse_range(cache, OCF_CORE_ID_INVALID, 0,
+			~0ULL);
 	OCF_METADATA_UNLOCK_WR();
 
 	if (result)
@@ -823,8 +861,8 @@ static void _ocf_mngt_cache_invalidate(ocf_pipeline_t pipeline, void *priv,
 
 static
 struct ocf_pipeline_properties _ocf_mngt_cache_purge_pipeline_properties = {
-	.priv_size = sizeof(struct ocf_mngt_cache_flush_context),
-	.finish = _ocf_mngt_flush_finish,
+	.priv_size = sizeof(struct ocf_mngt_cache_purge_context),
+	.finish = _ocf_mngt_cache_purge_finish,
 	.steps = {
 		OCF_PL_STEP(_ocf_mngt_begin_flush),
 		OCF_PL_STEP(_ocf_mngt_cache_flush),
@@ -838,7 +876,8 @@ void ocf_mngt_cache_purge(ocf_cache_t cache,
 {
 	ocf_pipeline_t pipeline;
 	int result = 0;
-	struct ocf_mngt_cache_flush_context *context;
+	struct ocf_mngt_flush_common_context *context;
+	struct ocf_mngt_cache_purge_context *cache_purge;
 
 	OCF_CHECK_NULL(cache);
 
@@ -855,28 +894,47 @@ void ocf_mngt_cache_purge(ocf_cache_t cache,
 		cmpl(cache, priv, -OCF_ERR_NO_MEM);
 		return;
 	}
-	context = ocf_pipeline_get_priv(pipeline);
+	cache_purge = ocf_pipeline_get_priv(pipeline);
+	context = &cache_purge->common;
 
 	context->pipeline = pipeline;
-	context->cmpl.purge_cache = cmpl;
 	context->priv = priv;
 	context->cache = cache;
 	context->allow_interruption = true;
-	context->op = purge_cache;
-	context->purge.core_id = OCF_CORE_ID_INVALID;
-	context->purge.end_byte = ~0ULL;
+	context->purge = true;
+	cache_purge->end = cmpl;
 
 	ocf_pipeline_next(context->pipeline);
 }
 
+static void _ocf_mngt_core_invalidate(ocf_pipeline_t pipeline, void *priv,
+		ocf_pipeline_arg_t arg)
+{
+	struct ocf_mngt_core_purge_context *core_purge = priv;
+	struct ocf_mngt_flush_common_context *context = &core_purge->common;
+	ocf_cache_t cache = context->cache;
+	ocf_core_id_t core_id = ocf_core_get_id(core_purge->core);
+	uint64_t end_byte = core_purge->core_size ?: ~0ULL;
+	int result;
+
+	OCF_METADATA_LOCK_WR();
+	result = ocf_metadata_sparse_range(cache, core_id, 0, end_byte);
+	OCF_METADATA_UNLOCK_WR();
+
+	if (result)
+		ocf_pipeline_finish(context->pipeline, result);
+	else
+		ocf_pipeline_next(context->pipeline);
+}
+
 static
 struct ocf_pipeline_properties _ocf_mngt_core_purge_pipeline_properties = {
-	.priv_size = sizeof(struct ocf_mngt_cache_flush_context),
-	.finish = _ocf_mngt_flush_finish,
+	.priv_size = sizeof(struct ocf_mngt_core_purge_context),
+	.finish = _ocf_mngt_core_purge_finish,
 	.steps = {
 		OCF_PL_STEP(_ocf_mngt_begin_flush),
-		OCF_PL_STEP(_ocf_mngt_core_flush),
-		OCF_PL_STEP(_ocf_mngt_cache_invalidate),
+		OCF_PL_STEP(_ocf_mngt_core_flush_step),
+		OCF_PL_STEP(_ocf_mngt_core_invalidate),
 		OCF_PL_STEP_TERMINATOR(),
 	},
 };
@@ -885,7 +943,8 @@ void ocf_mngt_core_purge(ocf_core_t core,
 		ocf_mngt_core_purge_end_t cmpl, void *priv)
 {
 	ocf_pipeline_t pipeline;
-	struct ocf_mngt_cache_flush_context *context;
+	struct ocf_mngt_flush_common_context *context;
+	struct ocf_mngt_core_purge_context *core_purge;
 	ocf_cache_t cache;
 	ocf_core_id_t core_id;
 	int result = 0;
@@ -912,17 +971,17 @@ void ocf_mngt_core_purge(ocf_core_t core,
 		return;
 	}
 
-	context = ocf_pipeline_get_priv(pipeline);
+	core_purge = ocf_pipeline_get_priv(pipeline);
+	context = &core_purge->common;
 
 	context->pipeline = pipeline;
-	context->cmpl.purge_core = cmpl;
 	context->priv = priv;
 	context->cache = cache;
 	context->allow_interruption = true;
-	context->op = purge_core;
-	context->purge.core_id = core_id;
-	context->purge.end_byte = core_size ?: ~0ULL;
-	context->core = core;
+	context->purge = true;
+	core_purge->core = core;
+	core_purge->core_size = core_size;
+	core_purge->end = cmpl;
 
 	ocf_pipeline_next(context->pipeline);
 }

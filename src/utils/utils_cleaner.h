@@ -76,7 +76,7 @@ struct flush_container {
 	uint64_t ticks2;
 
 	ocf_flush_containter_coplete_t end;
-	struct ocf_mngt_cache_flush_context *context;
+	struct ocf_mngt_flush_common_context *context;
 };
 
 /**
