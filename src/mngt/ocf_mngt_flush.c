@@ -772,6 +772,7 @@ static void _ocf_mngt_core_flush_step(ocf_pipeline_t pipeline, void *priv,
 	else
 		ocf_cache_log(cache, log_info, "Purging core\n");
 
+	context->cache->flushing_interrupted = 0;
 	_ocf_mngt_core_flush(core_flush, _ocf_mngt_core_flush_complete);
 }
 
