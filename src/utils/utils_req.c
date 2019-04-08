@@ -151,6 +151,11 @@ static env_allocator *_ocf_req_get_allocator(
 	return ocf_ctx->resources.req->allocator[idx];
 }
 
+static bool ocf_req_is_user_io(struct ocf_request *req)
+{
+	return (req->io_queue != req->cache->mngt_queue);
+}
+
 static void start_cache_req(struct ocf_request *req)
 {
 	ocf_cache_t cache = req->cache;
@@ -166,13 +171,14 @@ static void start_cache_req(struct ocf_request *req)
 	}
 }
 
-struct ocf_request *ocf_req_new(ocf_queue_t queue, ocf_core_t core,
-		uint64_t addr, uint32_t bytes, int rw)
+int ocf_req_new(struct ocf_request **out_req, ocf_queue_t queue,
+	ocf_core_t core, uint64_t addr, uint32_t bytes, int rw)
 {
 	uint64_t core_line_first, core_line_last, core_line_count;
 	ocf_cache_t cache = queue->cache;
 	struct ocf_request *req;
 	env_allocator *allocator;
+	int err;
 
 	if (likely(bytes)) {
 		core_line_first = ocf_bytes_2_lines(cache, addr);
@@ -192,7 +198,7 @@ struct ocf_request *ocf_req_new(ocf_queue_t queue, ocf_core_t core,
 	}
 
 	if (unlikely(!req))
-		return NULL;
+		return -ENOMEM;
 
 	if (allocator)
 		req->map = req->__map;
@@ -206,8 +212,10 @@ struct ocf_request *ocf_req_new(ocf_queue_t queue, ocf_core_t core,
 	req->core_id = core ? ocf_core_get_id(core) : 0;
 	req->cache = cache;
 
-	if (queue != cache->mngt_queue)
-		env_atomic_inc(&cache->pending_requests);
+	if (ocf_req_is_user_io(req) && !ocf_refcnt_inc(&cache->refcnt.io_req)) {
+		err = -EBUSY;
+		goto error;
+	}
 
 	start_cache_req(req);
 
@@ -222,7 +230,18 @@ struct ocf_request *ocf_req_new(ocf_queue_t queue, ocf_core_t core,
 	req->rw = rw;
 	req->part_id = PARTITION_DEFAULT;
 
-	return req;
+	*out_req = req;
+	return 0;
+
+error:
+	if (allocator) {
+		env_allocator_del(allocator, req);
+	} else {
+		env_free(req->map);
+		env_allocator_del(_ocf_req_get_allocator_1(req->cache), req);
+	}
+
+	return err;
 }
 
 int ocf_req_alloc_map(struct ocf_request *req)
@@ -239,36 +258,36 @@ int ocf_req_alloc_map(struct ocf_request *req)
 	return 0;
 }
 
-struct ocf_request *ocf_req_new_extended(ocf_queue_t queue, ocf_core_t core,
-		uint64_t addr, uint32_t bytes, int rw)
+int ocf_req_new_extended(struct ocf_request **out_req, ocf_queue_t queue,
+		ocf_core_t core, uint64_t addr, uint32_t bytes, int rw)
 {
-	struct ocf_request *req;
+	int ret;
 
-	req = ocf_req_new(queue, core, addr, bytes, rw);
+	ret = ocf_req_new(out_req, queue, core, addr, bytes, rw);
 
-	if (likely(req) && ocf_req_alloc_map(req)) {
-		ocf_req_put(req);
-		return NULL;
+	if (likely(!ret) && ocf_req_alloc_map(*out_req)) {
+		ocf_req_put(*out_req);
+		return -ENOMEM;
 	}
 
-	return req;
+	return ret;
 }
 
-struct ocf_request *ocf_req_new_discard(ocf_queue_t queue, ocf_core_t core,
-		uint64_t addr, uint32_t bytes, int rw)
+int ocf_req_new_discard(struct ocf_request **out_req, ocf_queue_t queue,
+		ocf_core_t core, uint64_t addr, uint32_t bytes, int rw)
 {
-	struct ocf_request *req;
+	int ret;
 
-	req = ocf_req_new_extended(queue, core, addr,
+	ret = ocf_req_new_extended(out_req, queue, core, addr,
 			OCF_MIN(bytes, MAX_TRIM_RQ_SIZE), rw);
-	if (!req)
-		return NULL;
+	if (ret)
+		return ret;
 
-	req->discard.sector = BYTES_TO_SECTORS(addr);
-	req->discard.nr_sects = BYTES_TO_SECTORS(bytes);
-	req->discard.handled = 0;
+	(*out_req)->discard.sector = BYTES_TO_SECTORS(addr);
+	(*out_req)->discard.nr_sects = BYTES_TO_SECTORS(bytes);
+	(*out_req)->discard.handled = 0;
 
-	return req;
+	return ret;
 }
 
 void ocf_req_get(struct ocf_request *req)
@@ -294,8 +313,8 @@ void ocf_req_put(struct ocf_request *req)
 		env_waitqueue_wake_up(&req->cache->pending_cache_wq);
 	}
 
-	if (req->io_queue != req->cache->mngt_queue)
-		env_atomic_dec(&req->cache->pending_requests);
+	if (ocf_req_is_user_io(req))
+		ocf_refcnt_dec(&req->cache->refcnt.io_req);
 
 	allocator = _ocf_req_get_allocator(req->cache,
 			req->alloc_core_line_count);
@@ -319,7 +338,8 @@ void ocf_req_clear_map(struct ocf_request *req)
 			   sizeof(req->map[0]) * req->core_line_count, 0));
 }
 
+/* TODO: get rid of this and use async wait on counter  */
 uint32_t ocf_req_get_allocated(struct ocf_cache *cache)
 {
-	return env_atomic_read(&cache->pending_requests);
+	return env_atomic_read(&cache->refcnt.io_req.counter);
 }
