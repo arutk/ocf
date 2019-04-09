@@ -159,16 +159,7 @@ static bool ocf_req_is_user_io(struct ocf_request *req)
 static void start_cache_req(struct ocf_request *req)
 {
 	ocf_cache_t cache = req->cache;
-
-	req->d2c = 1;
-	if (env_atomic_read(&cache->attached)) {
-		req->d2c = 0;
-		env_atomic_inc(&cache->pending_cache_requests);
-		if (!env_atomic_read(&cache->attached)) {
-			req->d2c = 1;
-			env_atomic_dec(&cache->pending_cache_requests);
-		}
-	}
+	req->d2c = !ocf_refcnt_inc(&cache->refcnt.metadata);
 }
 
 int ocf_req_new(struct ocf_request **out_req, ocf_queue_t queue,
@@ -308,10 +299,8 @@ void ocf_req_put(struct ocf_request *req)
 
 	OCF_DEBUG_TRACE(req->cache);
 
-	if (!req->d2c && !env_atomic_dec_return(
-			&req->cache->pending_cache_requests)) {
-		env_waitqueue_wake_up(&req->cache->pending_cache_wq);
-	}
+	if (!req->d2c)
+		ocf_refcnt_dec(&req->cache->refcnt.metadata);
 
 	if (ocf_req_is_user_io(req))
 		ocf_refcnt_dec(&req->cache->refcnt.io_req);
