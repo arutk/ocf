@@ -209,6 +209,8 @@ static void __init_partitions(ocf_cache_t cache)
 
 	/* Add other partition to the cache and make it as dummy */
 	for (i_part = 0; i_part < OCF_IO_CLASS_MAX; i_part++) {
+		ocf_refcnt_freeze(&cache->refcnt.cleaning[i_part]);
+
 		if (i_part == PARTITION_DEFAULT)
 			continue;
 
@@ -1568,6 +1570,8 @@ static void _ocf_mngt_attach_post_init(ocf_pipeline_t pipeline,
 {
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
+	struct ocf_user_part *curr_part;
+	ocf_part_id_t part_id;
 	int result;
 
 	if (!context->flags.cleaner_started) {
@@ -1580,6 +1584,9 @@ static void _ocf_mngt_attach_post_init(ocf_pipeline_t pipeline,
 		}
 		context->flags.cleaner_started = true;
 	}
+
+	for_each_part(cache, curr_part, part_id)
+		ocf_refcnt_unfreeze(&cache->refcnt.cleaning[part_id]);
 
 	ocf_refcnt_unfreeze(&cache->refcnt.metadata);
 
@@ -2352,6 +2359,7 @@ struct ocf_mngt_cache_detach_context {
 	ocf_pipeline_t pipeline;
 	ocf_cache_t cache;
 	int cache_write_error;
+	struct ocf_cleaner_wait_context cleaner_wait;
 };
 
 static void ocf_mngt_cache_detach_flush_cmpl(ocf_cache_t cache,
@@ -2377,13 +2385,13 @@ static void ocf_mngt_cache_detach_flush(ocf_pipeline_t pipeline,
 			context);
 }
 
-static void ocf_mngt_cache_detach_wait_pending_finish(void *priv)
+static void ocf_mngt_cache_detach_stop_cache_io_finish(void *priv)
 {
 	struct ocf_mngt_cache_detach_context *context = priv;
 	ocf_pipeline_next(context->pipeline);
 }
 
-static void ocf_mngt_cache_detach_wait_pending(ocf_pipeline_t pipeline,
+static void ocf_mngt_cache_detach_stop_cache_io(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_mngt_cache_detach_context *context = priv;
@@ -2391,7 +2399,23 @@ static void ocf_mngt_cache_detach_wait_pending(ocf_pipeline_t pipeline,
 
 	ocf_refcnt_freeze(&cache->refcnt.metadata);
 	ocf_refcnt_register_zero_cb(&cache->refcnt.metadata,
-			ocf_mngt_cache_detach_wait_pending_finish, context);
+			ocf_mngt_cache_detach_stop_cache_io_finish, context);
+}
+
+static void ocf_mngt_cache_detach_stop_cleaner_io_finish(void *priv)
+{
+	ocf_pipeline_t pipeline = priv;
+	ocf_pipeline_next(pipeline);
+}
+
+static void ocf_mngt_cache_detach_stop_cleaner_io(ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+	struct ocf_mngt_cache_detach_context *context = priv;
+
+	ocf_cleaner_wait_pending_io(context->cache, &context->cleaner_wait,
+			ocf_mngt_cache_detach_stop_cleaner_io_finish,
+			pipeline);
 }
 
 static void ocf_mngt_cache_detach_update_metadata(ocf_pipeline_t pipeline,
@@ -2471,7 +2495,8 @@ struct ocf_pipeline_properties ocf_mngt_cache_detach_pipeline_properties = {
 	.finish = ocf_mngt_cache_detach_finish,
 	.steps = {
 		OCF_PL_STEP(ocf_mngt_cache_detach_flush),
-		OCF_PL_STEP(ocf_mngt_cache_detach_wait_pending),
+		OCF_PL_STEP(ocf_mngt_cache_detach_stop_cache_io),
+		OCF_PL_STEP(ocf_mngt_cache_detach_stop_cleaner_io),
 		OCF_PL_STEP(ocf_mngt_cache_detach_update_metadata),
 		OCF_PL_STEP(ocf_mngt_cache_detach_unplug),
 		OCF_PL_STEP_TERMINATOR(),
