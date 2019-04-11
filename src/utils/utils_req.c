@@ -203,12 +203,14 @@ int ocf_req_new(struct ocf_request **out_req, ocf_queue_t queue,
 	req->core_id = core ? ocf_core_get_id(core) : 0;
 	req->cache = cache;
 
-	if (ocf_req_is_user_io(req) && !ocf_refcnt_inc(&cache->refcnt.io_req)) {
-		err = -EBUSY;
-		goto error;
-	}
+	if (ocf_req_is_user_io(req)) {
+		if (!ocf_refcnt_inc(&cache->refcnt.io_req)) {
+			err = -EBUSY;
+			goto error;
+		}
 
-	start_cache_req(req);
+		start_cache_req(req);
+	}
 
 	env_atomic_set(&req->ref_count, 1);
 
@@ -299,11 +301,11 @@ void ocf_req_put(struct ocf_request *req)
 
 	OCF_DEBUG_TRACE(req->cache);
 
-	if (!req->d2c)
-		ocf_refcnt_dec(&req->cache->refcnt.metadata);
-
-	if (ocf_req_is_user_io(req))
+	if (ocf_req_is_user_io(req)) {
+		if (!req->d2c)
+			ocf_refcnt_dec(&req->cache->refcnt.metadata);
 		ocf_refcnt_dec(&req->cache->refcnt.io_req);
+	}
 
 	allocator = _ocf_req_get_allocator(req->cache,
 			req->alloc_core_line_count);
