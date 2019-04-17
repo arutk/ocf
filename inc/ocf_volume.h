@@ -293,11 +293,21 @@ void ocf_volume_submit_discard(struct ocf_io *io);
 int ocf_volume_open(ocf_volume_t volume, void *volume_params);
 
 /**
- * @brief Get volume max io size
+ * @brief Volume close end callback
+ *
+ * @param[in] priv completion context
+ */
+typedef void (*ocf_volume_close_end_t)(void *priv);
+
+/**
+ * @brief Volume close
  *
  * @param[in] volume Volume
+ * @param[in] end Volume close completion callback
+ * @param[in] priv Volume close completion context
  */
-void ocf_volume_close(ocf_volume_t volume);
+void ocf_volume_close(ocf_volume_t volume, ocf_volume_close_end_t end,
+		void *priv);
 
 /**
  * @brief Get volume max io size

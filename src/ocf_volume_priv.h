@@ -28,6 +28,11 @@ struct ocf_volume {
 			/* true if reading discarded pages returns 0 */
 	} features;
 	struct ocf_refcnt refcnt;
+
+	/* close completion and context - stored in ocf_volume to eliminate
+	 * the need for allocating memory in close */
+	ocf_volume_close_end_t close_end_cb;
+	void *close_end_ctx;
 };
 
 int ocf_volume_type_init(struct ocf_volume_type **type,

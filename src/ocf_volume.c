@@ -286,26 +286,26 @@ int ocf_volume_open(ocf_volume_t volume, void *volume_params)
 
 static void ocf_volume_close_end(void *ctx)
 {
-	env_completion *cmpl = ctx;
+	ocf_volume_t volume = ctx;
 
-	env_completion_complete(cmpl);
+	volume->type->properties->ops.close(volume);
+
+	volume->close_end_cb(volume->end_ctx);
 }
 
-void ocf_volume_close(ocf_volume_t volume)
-{
-	env_completion cmpl;
-
+void ocf_volume_close(ocf_volume_t volume, ocf_volume_close_end_t end,
+		void *priv)
 	ENV_BUG_ON(!volume->type->properties->ops.close);
 	ENV_BUG_ON(!volume->opened);
 
-	env_completion_init(&cmpl);
-	ocf_refcnt_freeze(&volume->refcnt);
-	ocf_refcnt_register_zero_cb(&volume->refcnt, ocf_volume_close_end,
-			&cmpl);
-	env_completion_wait(&cmpl);
-
-	volume->type->properties->ops.close(volume);
 	volume->opened = false;
+
+	volume->close_end_cb = end;
+	volume->close_end_ctx = priv;
+
+	ocf_refcnt_freeze(&volme->refcnt);
+	ocf_refcnt_register_zero_cb(&volme->refcnt, ocf_volume_close_end,
+		volume);
 }
 
 unsigned int ocf_volume_get_max_io_size(ocf_volume_t volume)
