@@ -341,6 +341,8 @@ static void _ocf_mngt_close_all_uninitialized_cores(
 			continue;
 
 		volume = &(cache->core[i].volume);
+		// this is only internal error handling path in load -
+		//  needs to be sync
 		ocf_volume_close(volume);
 
 		--j;
@@ -1136,6 +1138,7 @@ int ocf_mngt_get_ram_needed(ocf_cache_t cache,
 	*ram_needed = _ocf_mngt_calculate_ram_needed(cache, &volume);
 
 	ocf_volume_close(&volume);
+	// no I/O - can close synchronously
 	ocf_volume_deinit(&volume);
 
 	return 0;
@@ -1183,6 +1186,7 @@ static void _ocf_mngt_attach_handle_error(
 		ocf_metadata_deinit_variable_size(cache);
 
 	if (context->flags.device_opened)
+		// need asynch - TODO
 		ocf_volume_close(&cache->device->volume);
 
 	if (context->flags.concurrency_inited)
@@ -1829,6 +1833,7 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
 	struct _ocf_mngt_cache_unplug_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
+	/* need to wait here - this is unplug */
 	ocf_volume_close(&cache->device->volume);
 
 	ocf_metadata_deinit_variable_size(cache);
@@ -2011,6 +2016,7 @@ static void ocf_mngt_cache_stop_remove_cores(ocf_pipeline_t pipeline,
 		cache_mng_core_remove_from_cache(cache, i);
 		if (ocf_cache_is_device_attached(cache))
 			cache_mng_core_remove_from_cleaning_pol(cache, i);
+		// need asynch
 		cache_mng_core_close(cache, i);
 		j++;
 	}

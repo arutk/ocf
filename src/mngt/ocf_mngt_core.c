@@ -57,6 +57,7 @@ static int _ocf_mngt_cache_try_add_core(ocf_cache_t cache, ocf_core_t *core,
 	return 0;
 
 error_after_open:
+	// synch
 	ocf_volume_close(volume);
 error_out:
 	*core = NULL;
@@ -113,6 +114,7 @@ static void _ocf_mngt_cache_add_core_handle_error(
 	}
 
 	if (context->flags.volume_opened)
+		// synch
 		ocf_volume_close(volume);
 
 	if (context->flags.volume_inited)
@@ -646,6 +648,7 @@ static void _ocf_mngt_cache_remove_core(ocf_pipeline_t pipeline, void *priv,
 
 	ocf_core_log(core, log_debug, "Removing core\n");
 
+	/* async */
 	ocf_volume_close(&core->front_volume);
 
 	/* Deinit everything*/
@@ -721,7 +724,6 @@ void ocf_mngt_cache_remove_core(ocf_core_t core,
 	context->core = core;
 	context->core_name = ocf_core_get_name(core);
 
-
 	ocf_pipeline_next(pipeline);
 }
 
@@ -746,6 +748,7 @@ static void _ocf_mngt_cache_detach_core(ocf_pipeline_t pipeline,
 
 	ocf_core_log(core, log_debug, "Detaching core\n");
 
+	/* need asynch */
 	status = cache_mng_core_close(cache, core_id);
 
 	if (status) {

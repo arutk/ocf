@@ -22,6 +22,7 @@ int cache_mng_core_close(ocf_cache_t cache, ocf_core_id_t core_id)
 	if (!cache->core[core_id].opened)
 		return -OCF_ERR_CORE_IN_INACTIVE_STATE;
 
+	/* asynch */
 	ocf_volume_close(&cache->core[core_id].volume);
 	cache->core[core_id].opened = false;
 
