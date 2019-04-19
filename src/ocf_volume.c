@@ -247,7 +247,7 @@ void ocf_volume_submit_flush(struct ocf_io *io)
 		io->end(io, -EIO);
 
 	if (!io->volume->type->properties->ops.submit_flush) {
-		ocf_io_end(io, 0); 
+		ocf_io_end(io, 0);
 		return;
 	}
 
@@ -260,7 +260,7 @@ void ocf_volume_submit_discard(struct ocf_io *io)
 		io->end(io, -EIO);
 
 	if (!io->volume->type->properties->ops.submit_discard) {
-		ocf_io_end(io, 0); 
+		ocf_io_end(io, 0);
 		return;
 	}
 
@@ -290,11 +290,12 @@ static void ocf_volume_close_end(void *ctx)
 
 	volume->type->properties->ops.close(volume);
 
-	volume->close_end_cb(volume->end_ctx);
+	volume->close_end_cb(volume->close_end_ctx);
 }
 
 void ocf_volume_close(ocf_volume_t volume, ocf_volume_close_end_t end,
 		void *priv)
+{
 	ENV_BUG_ON(!volume->type->properties->ops.close);
 	ENV_BUG_ON(!volume->opened);
 
@@ -303,9 +304,11 @@ void ocf_volume_close(ocf_volume_t volume, ocf_volume_close_end_t end,
 	volume->close_end_cb = end;
 	volume->close_end_ctx = priv;
 
-	ocf_refcnt_freeze(&volme->refcnt);
-	ocf_refcnt_register_zero_cb(&volme->refcnt, ocf_volume_close_end,
-		volume);
+	ocf_refcnt_freeze(&volume->refcnt);
+	if (end) {
+		ocf_refcnt_register_zero_cb(&volume->refcnt,
+				ocf_volume_close_end, volume);
+	}
 }
 
 unsigned int ocf_volume_get_max_io_size(ocf_volume_t volume)

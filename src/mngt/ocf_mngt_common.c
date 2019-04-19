@@ -16,17 +16,29 @@
 #include "../ocf_queue_priv.h"
 #include "../engine/engine_common.h"
 
-/* Close if opened */
-int cache_mng_core_close(ocf_cache_t cache, ocf_core_id_t core_id)
+
+static void  cache_mng_core_close_end(void *priv)
 {
-	if (!cache->core[core_id].opened)
-		return -OCF_ERR_CORE_IN_INACTIVE_STATE;
+	ocf_core_t core = priv;
 
-	/* asynch */
-	ocf_volume_close(&cache->core[core_id].volume);
+	core->close_end(core->close_priv, 0);
+}
+
+/* Close if opened */
+void cache_mng_core_close(ocf_cache_t cache, ocf_core_id_t core_id,
+		cache_mng_core_close_end_t end, void *priv)
+{
+	if (!cache->core[core_id].opened) {
+		end(priv, -OCF_ERR_CORE_IN_INACTIVE_STATE);
+		return;
+	}
+
 	cache->core[core_id].opened = false;
+	cache->core[core_id].close_end = end;
+	cache->core[core_id].close_priv = priv;
 
-	return 0;
+	ocf_volume_close(&cache->core[core_id].volume,
+			cache_mng_core_close_end, &cache->core[core_id]);
 }
 
 /* Remove core from cleaning policy */

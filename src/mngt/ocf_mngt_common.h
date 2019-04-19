@@ -7,7 +7,10 @@
 #ifndef __OCF_MNGT_COMMON_H__
 #define __OCF_MNGT_COMMON_H__
 
-int cache_mng_core_close(ocf_cache_t cache, ocf_core_id_t core_id);
+typedef void (*cache_mng_core_close_end_t)(void *priv, int error);
+
+void cache_mng_core_close(ocf_cache_t cache, ocf_core_id_t core_id,
+		cache_mng_core_close_end_t end, void *priv);
 
 void cache_mng_core_remove_from_meta(struct ocf_cache *cache, int core_id);
 

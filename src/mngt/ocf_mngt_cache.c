@@ -98,6 +98,9 @@ struct ocf_cachemng_init_params {
 typedef void (*_ocf_mngt_cache_attach_end_t)(ocf_cache_t, void *priv1,
 	void *priv2, int error);
 
+/* TODO remove */
+typedef void (*_ocf_mngt_cache_attach_complete_t)(void *priv);
+
 struct ocf_cache_attach_context {
 	ocf_cache_t cache;
 		/*!< cache that is being initialized */
@@ -167,11 +170,14 @@ struct ocf_cache_attach_context {
 		ocf_pipeline_t pipeline;
 	} test;
 
+	/* user callback and context */
 	_ocf_mngt_cache_attach_end_t cmpl;
 	void *priv1;
 	void *priv2;
 
 	ocf_pipeline_t pipeline;
+
+	int error;
 };
 
 static ocf_cache_id_t _ocf_mngt_cache_find_free_id(ocf_ctx_t owner)
@@ -341,9 +347,7 @@ static void _ocf_mngt_close_all_uninitialized_cores(
 			continue;
 
 		volume = &(cache->core[i].volume);
-		// this is only internal error handling path in load -
-		//  needs to be sync
-		ocf_volume_close(volume);
+		ocf_volume_close(volume, NULL, NULL);
 
 		--j;
 
@@ -1137,8 +1141,7 @@ int ocf_mngt_get_ram_needed(ocf_cache_t cache,
 
 	*ram_needed = _ocf_mngt_calculate_ram_needed(cache, &volume);
 
-	ocf_volume_close(&volume);
-	// no I/O - can close synchronously
+	ocf_volume_close(&volume, NULL, NULL);
 	ocf_volume_deinit(&volume);
 
 	return 0;
@@ -1171,10 +1174,46 @@ static void _ocf_mngt_init_handle_error(ocf_ctx_t ctx,
 	env_mutex_unlock(&ctx->lock);
 }
 
-static void _ocf_mngt_attach_handle_error(
-		struct ocf_cache_attach_context *context)
+static void _ocf_mngt_cache_attach_finish_complete(void *priv)
 {
+	struct ocf_cache_attach_context *context = priv;
+
+	context->cmpl(context->cache, context->priv1, context->priv2,
+			context->error);
+
+	env_vfree(context->cfg.uuid.data);
+	ocf_pipeline_destroy(context->pipeline);
+}
+
+static void _ocf_mngt_attach_handle_error_finish(void *priv)
+{
+	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
+
+	if (context->flags.concurrency_inited)
+		ocf_concurrency_deinit(cache);
+
+	if (context->flags.volume_inited)
+		ocf_volume_deinit(&cache->device->volume);
+
+	if (context->flags.device_alloc)
+		env_vfree(cache->device);
+
+	_ocf_mngt_cache_attach_finish_complete(context);
+}
+
+static void _ocf_mngt_cache_attach_finish(ocf_pipeline_t pipeline,
+		void *priv, int error)
+{
+	struct ocf_cache_attach_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	context->error = error;
+
+	if (!error) {
+		_ocf_mngt_cache_attach_finish_complete(context);
+		return;
+	}
 
 	if (context->flags.cleaner_started)
 		ocf_stop_cleaner(cache);
@@ -1185,18 +1224,13 @@ static void _ocf_mngt_attach_handle_error(
 	if (context->flags.attached_metadata_inited)
 		ocf_metadata_deinit_variable_size(cache);
 
-	if (context->flags.device_opened)
-		// need asynch - TODO
-		ocf_volume_close(&cache->device->volume);
-
-	if (context->flags.concurrency_inited)
-		ocf_concurrency_deinit(cache);
-
-	if (context->flags.volume_inited)
-		ocf_volume_deinit(&cache->device->volume);
-
-	if (context->flags.device_alloc)
-		env_vfree(cache->device);
+	if (context->flags.device_opened) {
+		ocf_volume_close(&cache->device->volume,
+				_ocf_mngt_attach_handle_error_finish,
+				context);
+	} else {
+		_ocf_mngt_attach_handle_error_finish(context);
+	}
 }
 
 static int _ocf_mngt_cache_init(ocf_cache_t cache,
@@ -1589,20 +1623,6 @@ static void _ocf_mngt_attach_post_init(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(context->pipeline);
 }
 
-static void _ocf_mngt_cache_attach_finish(ocf_pipeline_t pipeline,
-		void *priv, int error)
-{
-	struct ocf_cache_attach_context *context = priv;
-
-	if (error)
-		_ocf_mngt_attach_handle_error(context);
-
-	context->cmpl(context->cache, context->priv1, context->priv2, error);
-
-	env_vfree(context->cfg.uuid.data);
-	ocf_pipeline_destroy(context->pipeline);
-}
-
 struct ocf_pipeline_properties _ocf_mngt_cache_attach_pipeline_properties = {
 	.priv_size = sizeof(struct ocf_cache_attach_context),
 	.finish = _ocf_mngt_cache_attach_finish,
@@ -1826,15 +1846,14 @@ struct _ocf_mngt_cache_unplug_context {
 	_ocf_mngt_cache_unplug_end_t cmpl;
 	void *priv;
 	ocf_cache_t cache;
+	int error;
 };
 
-static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
+
+static void _ocf_mngt_cache_unplug_complete(void *priv)
 {
 	struct _ocf_mngt_cache_unplug_context *context = priv;
 	ocf_cache_t cache = context->cache;
-
-	/* need to wait here - this is unplug */
-	ocf_volume_close(&cache->device->volume);
 
 	ocf_metadata_deinit_variable_size(cache);
 	ocf_concurrency_deinit(cache);
@@ -1848,8 +1867,19 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
 		are better separated in statistics */
 	_ocf_mngt_init_attached_nonpersistent(cache);
 
-	context->cmpl(context->priv, error ? -OCF_ERR_WRITE_CACHE : 0);
+	context->cmpl(context->priv, context->error ? -OCF_ERR_WRITE_CACHE : 0);
 	env_vfree(context);
+}
+
+static void _ocf_mngt_cache_unplug_volume_close(void *priv, int error)
+{
+	struct _ocf_mngt_cache_unplug_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	context->error = error;
+
+	ocf_volume_close(&cache->device->volume,
+			_ocf_mngt_cache_unplug_complete, context);
 }
 
 /**
@@ -1901,11 +1931,11 @@ static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
 	if (!stop) {
 		/* Just set correct shutdown status */
 		ocf_metadata_set_shutdown_status(cache, ocf_metadata_detached,
-				_ocf_mngt_cache_unplug_complete, context);
+				_ocf_mngt_cache_unplug_volume_close, context);
 	} else {
 		/* Flush metadata */
 		ocf_metadata_flush_all(cache,
-				_ocf_mngt_cache_unplug_complete, context);
+				_ocf_mngt_cache_unplug_volume_close, context);
 	}
 }
 
@@ -1980,6 +2010,7 @@ struct ocf_mngt_cache_stop_context {
 	ocf_ctx_t ctx;
 	char cache_name[OCF_CACHE_NAME_SIZE];
 	int cache_write_error;
+	env_atomic core_count;
 };
 
 static void ocf_mngt_cache_stop_wait_io_finish(void *priv)
@@ -2000,6 +2031,18 @@ static void ocf_mngt_cache_stop_wait_io(ocf_pipeline_t pipeline,
 			ocf_mngt_cache_stop_wait_io_finish, context);
 }
 
+static void ocf_mngt_cache_stop_remove_cores_finish(void *priv, int error)
+{
+	struct ocf_mngt_cache_stop_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	if (env_atomic_dec_return(&context->core_count))
+		return;
+
+	ENV_BUG_ON(cache->conf_meta->core_count != 0);
+	ocf_pipeline_next(context->pipeline);
+}
+
 static void ocf_mngt_cache_stop_remove_cores(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
@@ -2009,20 +2052,23 @@ static void ocf_mngt_cache_stop_remove_cores(ocf_pipeline_t pipeline,
 
 	no = cache->conf_meta->core_count;
 
+	env_atomic_set(&context->core_count, 1);
+
 	/* All exported objects removed, cleaning up rest. */
 	for (i = 0, j = 0; j < no && i < OCF_CORE_MAX; i++) {
 		if (!env_bit_test(i, cache->conf_meta->valid_core_bitmap))
 			continue;
+		env_atomic_inc(&context->core_count);
 		cache_mng_core_remove_from_cache(cache, i);
 		if (ocf_cache_is_device_attached(cache))
 			cache_mng_core_remove_from_cleaning_pol(cache, i);
-		// need asynch
-		cache_mng_core_close(cache, i);
+		cache_mng_core_close(cache, i,
+				ocf_mngt_cache_stop_remove_cores_finish,
+				context);
 		j++;
 	}
-	ENV_BUG_ON(cache->conf_meta->core_count != 0);
 
-	ocf_pipeline_next(pipeline);
+	ocf_mngt_cache_stop_remove_cores_finish(context, 0);
 }
 
 static void ocf_mngt_cache_stop_unplug_complete(void *priv, int error)

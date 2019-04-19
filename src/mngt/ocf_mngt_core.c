@@ -57,8 +57,7 @@ static int _ocf_mngt_cache_try_add_core(ocf_cache_t cache, ocf_core_t *core,
 	return 0;
 
 error_after_open:
-	// synch
-	ocf_volume_close(volume);
+	ocf_volume_close(volume, NULL, NULL);
 error_out:
 	*core = NULL;
 	return result;
@@ -114,8 +113,7 @@ static void _ocf_mngt_cache_add_core_handle_error(
 	}
 
 	if (context->flags.volume_opened)
-		// synch
-		ocf_volume_close(volume);
+		ocf_volume_close(volume, NULL, NULL);
 
 	if (context->flags.volume_inited)
 		ocf_volume_deinit(volume);
@@ -638,6 +636,24 @@ static void ocf_mngt_cache_remove_core_flush_sb_complete(void *priv, int error)
 	ocf_pipeline_next(context->pipeline);
 }
 
+static void _ocf_mngt_cache_remove_core_flush_sb(ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+	struct ocf_mngt_cache_remove_core_context *context = priv;
+
+	/* Update super-block with core device removal */
+	ocf_metadata_flush_superblock(context->cache,
+			ocf_mngt_cache_remove_core_flush_sb_complete, context);
+}
+
+static void _ocf_mngt_cache_remove_core_end(void *priv, int error)
+{
+	struct ocf_mngt_cache_remove_core_context *context = priv;
+
+	ENV_BUG_ON(error);
+	ocf_pipeline_next(context->pipeline);
+}
+
 static void _ocf_mngt_cache_remove_core(ocf_pipeline_t pipeline, void *priv,
 		ocf_pipeline_arg_t arg)
 {
@@ -648,8 +664,9 @@ static void _ocf_mngt_cache_remove_core(ocf_pipeline_t pipeline, void *priv,
 
 	ocf_core_log(core, log_debug, "Removing core\n");
 
-	/* async */
-	ocf_volume_close(&core->front_volume);
+	/* If there are outstanding I/O to this volume, close will be deferred
+	 * until all of them are destroyed */
+	ocf_volume_close(&core->front_volume, NULL, NULL);
 
 	/* Deinit everything*/
 	if (ocf_cache_is_device_attached(cache)) {
@@ -658,11 +675,8 @@ static void _ocf_mngt_cache_remove_core(ocf_pipeline_t pipeline, void *priv,
 	}
 	cache_mng_core_remove_from_meta(cache, core_id);
 	cache_mng_core_remove_from_cache(cache, core_id);
-	cache_mng_core_close(cache, core_id);
-
-	/* Update super-block with core device removal */
-	ocf_metadata_flush_superblock(cache,
-			ocf_mngt_cache_remove_core_flush_sb_complete, context);
+	cache_mng_core_close(cache, core_id, _ocf_mngt_cache_remove_core_end,
+			context);
 }
 
 static void ocf_mngt_cache_remove_core_wait_cleaning_complete(void *priv)
@@ -692,6 +706,7 @@ struct ocf_pipeline_properties ocf_mngt_cache_remove_core_pipeline_props = {
 	.steps = {
 		OCF_PL_STEP(ocf_mngt_cache_remove_core_wait_cleaning),
 		OCF_PL_STEP(_ocf_mngt_cache_remove_core),
+		OCF_PL_STEP(_ocf_mngt_cache_remove_core_flush_sb),
 		OCF_PL_STEP_TERMINATOR(),
 	},
 };
@@ -737,6 +752,23 @@ struct ocf_mngt_cache_detach_core_context {
 	struct ocf_cleaner_wait_context cleaner_wait;
 };
 
+static void _ocf_mngt_cache_detach_core_end(void *priv, int error)
+{
+	struct ocf_mngt_cache_remove_core_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	if (error) {
+		ocf_pipeline_finish(context->pipeline, error);
+		return;
+	}
+
+	cache->ocf_core_inactive_count++;
+	env_bit_set(ocf_cache_state_incomplete,
+			&cache->cache_state);
+
+	ocf_pipeline_next(context->pipeline);
+}
+
 static void _ocf_mngt_cache_detach_core(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
@@ -744,22 +776,11 @@ static void _ocf_mngt_cache_detach_core(ocf_pipeline_t pipeline,
 	ocf_cache_t cache = context->cache;
 	ocf_core_t core = context->core;
 	ocf_core_id_t core_id = ocf_core_get_id(core);
-	int status;
 
 	ocf_core_log(core, log_debug, "Detaching core\n");
 
-	/* need asynch */
-	status = cache_mng_core_close(cache, core_id);
-
-	if (status) {
-		ocf_pipeline_finish(pipeline, status);
-		return;
-	}
-
-	cache->ocf_core_inactive_count++;
-	env_bit_set(ocf_cache_state_incomplete,
-			&cache->cache_state);
-	ocf_pipeline_next(pipeline);
+	cache_mng_core_close(cache, core_id, _ocf_mngt_cache_detach_core_end,
+			context);
 }
 
 static void ocf_mngt_cache_detach_core_finish(ocf_pipeline_t pipeline,

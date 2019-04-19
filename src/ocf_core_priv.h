@@ -7,6 +7,7 @@
 #define __OCF_CORE_PRIV_H__
 
 #include "ocf/ocf.h"
+#include "mngt/ocf_mngt_common.h"
 #include "ocf_env.h"
 #include "ocf_ctx_priv.h"
 #include "ocf_volume_priv.h"
@@ -50,6 +51,10 @@ struct ocf_core {
 	uint32_t opened : 1;
 
 	struct ocf_counters_core *counters;
+
+	/* user completion and context for close */
+	cache_mng_core_close_end_t close_end;
+	void *close_priv;
 };
 
 bool ocf_core_is_valid(ocf_cache_t cache, ocf_core_id_t id);

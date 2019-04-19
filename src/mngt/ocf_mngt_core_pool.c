@@ -110,8 +110,7 @@ void ocf_mngt_core_pool_deinit(ocf_ctx_t ctx)
 
 	list_for_each_entry_safe(svolume, tvolume, &ctx->core_pool.core_pool_head,
 			core_pool_item) {
-		/* core pool - synch */
-		ocf_volume_close(svolume);
+		ocf_volume_close(svolume, NULL, NULL);
 		ocf_mngt_core_pool_remove(ctx, svolume);
 	}
 }
