@@ -170,6 +170,16 @@ void __wrap_ocf_mngt_cache_detach_flush(
 {
 }
 
+void __wrap_ocf_mngt_cache_detach_stop_cache_io(ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+}
+
+void ocf_mngt_cache_detach_stop_cleaner_io(ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+}
+
 void __wrap_ocf_mngt_cache_detach_wait_pending(
 		  ocf_pipeline_t pipeline, void *priv, ocf_pipeline_arg_t arg)
 {
