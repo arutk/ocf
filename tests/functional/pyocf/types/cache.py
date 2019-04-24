@@ -265,6 +265,32 @@ class Cache:
             _discard_on_start=False,
         )
 
+    def _raw_detach_device(self, completion):
+        device.owner.lib.ocf_mngt_cache_detach(
+            self.cache_handle, completion, None
+        )
+
+    @classmethod
+    def _create_detach_completion(cls):
+        return OcfCompletion(
+            [("cache", c_void_p), ("priv", c_void_p), ("error", c_int)]
+        )
+
+    def detach_device():
+        self.get_and_write_lock()
+
+        c = Cache._create_detach_completion()
+
+        self._raw_detach_device(c)
+
+        c.wait()
+
+        if c.results["error"]:
+            self.put_and_write_unlock()
+            raise OcfError("Detaching cache device failed", c.results["error"])
+
+        self.put_and_write_unlock()
+
     def attach_device(
         self, device, force=False, perform_test=False, cache_line_size=None
     ):
@@ -387,12 +413,19 @@ class Cache:
 
         self.put_and_write_unlock()
 
+    def _raw_remove_core(self, core: Core, completion):
+        self.owner.lib.ocf_mngt_cache_remove_core(core.handle, completion, None)
+
+    @classmethod
+    def _create_remove_core_completion(cls):
+        return OcfCompletion([("priv", c_void_p), ("error", c_int)])
+
     def remove_core(self, core: Core):
         self.get_and_write_lock()
 
-        c = OcfCompletion([("priv", c_void_p), ("error", c_int)])
+        c = Cache._create_remove_core_completion()
 
-        self.owner.lib.ocf_mngt_cache_remove_core(core.handle, c, None)
+        self._raw_remove_core(core, c)
 
         c.wait()
         if c.results["error"]:
