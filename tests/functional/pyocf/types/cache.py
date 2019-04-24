@@ -156,14 +156,25 @@ class Cache:
         self.io_queues = []
         self.cores = []
 
-    def start_cache(
-        self, default_io_queue: Queue = None, mngt_queue: Queue = None
-    ):
+    def _raw_start(self):
         status = self.owner.lib.ocf_mngt_cache_start(
             self.owner.ctx_handle, byref(self.cache_handle), byref(self.cfg)
         )
         if status:
             raise OcfError("Creating cache instance failed", status)
+
+    def _raw_set_mngt_queue(self, queue):
+        status = self.owner.lib.ocf_mngt_cache_set_mngt_queue(
+            self, queue
+        )
+        if status:
+            raise OcfError("Error setting management queue", status)
+
+
+    def start_cache(
+        self, default_io_queue: Queue = None, mngt_queue: Queue = None
+    ):
+        self._raw_start()
         self.owner.caches.append(self)
 
         self.mngt_queue = mngt_queue or Queue(
@@ -177,11 +188,7 @@ class Cache:
                 Queue(self, "default-io-{}".format(self.get_name()))
             ]
 
-        status = self.owner.lib.ocf_mngt_cache_set_mngt_queue(
-            self, self.mngt_queue
-        )
-        if status:
-            raise OcfError("Error setting management queue", status)
+        self._raw_set_mngt_queue(self.self.mngt_queue)
 
         self.started = True
 
@@ -472,17 +479,24 @@ class Cache:
 
         return self.io_queues[0]
 
+    def _raw_stop(self, completion):
+        self.owner.lib.ocf_mngt_cache_stop(self.cache_handle, completion, None)
+
+    @classmethod
+    def _create_stop_completion(cls):
+        return OcfCompletion(
+            [("cache", c_void_p), ("priv", c_void_p), ("error", c_int)]
+        )
+
+
     def stop(self):
         if not self.started:
             raise Exception("Already stopped!")
 
         self.get_and_write_lock()
 
-        c = OcfCompletion(
-            [("cache", c_void_p), ("priv", c_void_p), ("error", c_int)]
-        )
-
-        self.owner.lib.ocf_mngt_cache_stop(self.cache_handle, c, None)
+        c = Cache._create_stop_completion()
+        self._raw_stop(c)
 
         c.wait()
         if c.results["error"]:
