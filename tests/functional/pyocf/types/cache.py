@@ -188,7 +188,7 @@ class Cache:
                 Queue(self, "default-io-{}".format(self.get_name()))
             ]
 
-        self._raw_set_mngt_queue(self.self.mngt_queue)
+        self._raw_set_mngt_queue(self.mngt_queue)
 
         self.started = True
 
