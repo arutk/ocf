@@ -278,6 +278,8 @@ void ocf_core_submit_io_mode(struct ocf_io *io, ocf_cache_mode_t cache_mode)
 	core_io->req->data = core_io->data;
 	core_io->req->complete = ocf_req_complete;
 	core_io->req->io = io;
+	core_io->req->seq_cutoff = ocf_seq_cutoff_check(core, io->dir, io->addr,
+			io->bytes);
 
 	ocf_seq_cutoff_update(core, core_io->req);
 
@@ -367,6 +369,8 @@ int ocf_core_submit_io_fast(struct ocf_io *io)
 	req->data = core_io->data;
 	req->complete = ocf_req_complete;
 	req->io = io;
+	core_io->req->seq_cutoff = ocf_seq_cutoff_check(core, io->dir, io->addr,
+			io->bytes);
 
 	ocf_core_update_stats(core, io);
 
