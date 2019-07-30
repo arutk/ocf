@@ -216,6 +216,7 @@ int ocf_read_generic(struct ocf_request *req)
 	bool mapped;
 	int lock = OCF_LOCK_NOT_ACQUIRED;
 	struct ocf_cache *cache = req->cache;
+	bool promote = true;
 
 	ocf_io_start(&req->ioi.io);
 
@@ -258,16 +259,19 @@ int ocf_read_generic(struct ocf_request *req)
 	/*- END Metadata RD access -------------------------------------------*/
 
 	if (!mapped) {
+		promote = ocf_promotion_req_should_promote(
+				cache->promotion_policy, req);
+	}
 
+	if (!mapped && promote) {
 		/*- Metadata WR access ---------------------------------------*/
-
 		OCF_METADATA_LOCK_WR();
 
 		/* Now there is exclusive access for metadata. May traverse once
 		 * again. If there are misses need to call eviction. This
 		 * process is called 'mapping'.
 		 */
-		ocf_engine_map(req);
+		ocf_engine_evict(req);
 
 		if (!req->info.mapping_error) {
 			if (ocf_engine_is_hit(req)) {
@@ -287,7 +291,7 @@ int ocf_read_generic(struct ocf_request *req)
 		/*- END Metadata WR access -----------------------------------*/
 	}
 
-	if (!req->info.mapping_error) {
+	if (promote && !req->info.mapping_error) {
 		if (lock >= 0) {
 			if (lock != OCF_LOCK_ACQUIRED) {
 				/* Lock was not acquired, need to wait for resume */

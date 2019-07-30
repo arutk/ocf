@@ -171,6 +171,9 @@ void ocf_engine_lookup_map_entry(struct ocf_cache *cache,
  */
 void ocf_engine_map(struct ocf_request *req);
 
+/* TODO: comment */
+void ocf_engine_evict(struct ocf_request *req);
+
 /**
  * @brief Traverse OCF request (lookup cache)
  *
