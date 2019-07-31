@@ -238,26 +238,27 @@ int ocf_read_generic(struct ocf_request *req)
 
 	lock = ocf_engine_map_and_lock(req, _ocf_read_request_lock_cls);
 
-	if (!req->info.mapping_error) {
-		if (lock >= 0) {
-			if (lock != OCF_LOCK_ACQUIRED) {
-				/* Lock was not acquired, need to wait for resume */
-				OCF_DEBUG_RQ(req, "NO LOCK");
-			} else {
-				/* Lock was acquired can perform IO */
-				_ocf_read_generic_do(req);
-			}
-		} else {
-			OCF_DEBUG_RQ(req, "LOCK ERROR %d", lock);
-			req->complete(req, lock);
-			ocf_req_put(req);
-		}
-	} else {
+	if (req->info.mapping_error) {
 		ocf_req_clear(req);
 		ocf_get_io_if(ocf_cache_mode_pt)->read(req);
+		goto put;
 	}
 
+	if (lock >= 0) {
+		if (lock != OCF_LOCK_ACQUIRED) {
+			/* Lock was not acquired, need to wait for resume */
+			OCF_DEBUG_RQ(req, "NO LOCK");
+		} else {
+			/* Lock was acquired can perform IO */
+			_ocf_read_generic_do(req);
+		}
+	} else {
+		OCF_DEBUG_RQ(req, "LOCK ERROR %d", lock);
+		req->complete(req, lock);
+		ocf_req_put(req);
+	}
 
+put:
 	/* Put OCF request - decrease reference counter */
 	ocf_req_put(req);
 
