@@ -58,8 +58,6 @@ static void _ocf_read_fast_complete(struct ocf_request *req, int error)
 
 static int _ocf_read_fast_do(struct ocf_request *req)
 {
-	struct ocf_cache *cache = req->cache;
-
 	if (ocf_engine_is_miss(req)) {
 		/* It seams that after resume, now request is MISS, do PT */
 		OCF_DEBUG_RQ(req, "Switching to read PT");
@@ -74,14 +72,14 @@ static int _ocf_read_fast_do(struct ocf_request *req)
 	if (req->info.re_part) {
 		OCF_DEBUG_RQ(req, "Re-Part");
 
-		OCF_METADATA_LOCK_WR();
+		ocf_req_hash_lock_wr(req);
 
 		/* Probably some cache lines are assigned into wrong
 		 * partition. Need to move it to new one
 		 */
 		ocf_part_move(req);
 
-		OCF_METADATA_UNLOCK_WR();
+		ocf_req_hash_unlock_wr(req);
 	}
 
 	/* Submit IO */
@@ -111,7 +109,6 @@ int ocf_read_fast(struct ocf_request *req)
 {
 	bool hit;
 	int lock = OCF_LOCK_NOT_ACQUIRED;
-	struct ocf_cache *cache = req->cache;
 
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
@@ -121,7 +118,8 @@ int ocf_read_fast(struct ocf_request *req)
 
 	/*- Metadata RD access -----------------------------------------------*/
 
-	OCF_METADATA_LOCK_RD();
+	ocf_req_hash(req);
+	ocf_req_hash_lock_rd(req);
 
 	/* Traverse request to cache if there is hit */
 	ocf_engine_traverse(req);
@@ -132,7 +130,13 @@ int ocf_read_fast(struct ocf_request *req)
 		lock = ocf_req_trylock_rd(req);
 	}
 
-	OCF_METADATA_UNLOCK_RD();
+	if (lock != OCF_LOCK_ACQUIRED) {
+		ocf_req_hash_lock_upgrade(req);
+		lock = ocf_req_lock_rd(req);
+		ocf_req_hash_unlock_wr(req);
+	} else {
+		ocf_req_hash_unlock_rd(req);
+	}
 
 	if (hit) {
 		OCF_DEBUG_RQ(req, "Fast path success");
@@ -181,7 +185,6 @@ int ocf_write_fast(struct ocf_request *req)
 {
 	bool mapped;
 	int lock = OCF_LOCK_NOT_ACQUIRED;
-	struct ocf_cache *cache = req->cache;
 
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
@@ -191,7 +194,8 @@ int ocf_write_fast(struct ocf_request *req)
 
 	/*- Metadata RD access -----------------------------------------------*/
 
-	OCF_METADATA_LOCK_RD();
+	ocf_req_hash(req);
+	ocf_req_hash_lock_rd(req);
 
 	/* Traverse request to cache if there is hit */
 	ocf_engine_traverse(req);
@@ -202,7 +206,7 @@ int ocf_write_fast(struct ocf_request *req)
 		lock = ocf_req_trylock_wr(req);
 	}
 
-	OCF_METADATA_UNLOCK_RD();
+	ocf_req_hash_unlock_rd(req);
 
 	if (mapped) {
 		if (lock >= 0) {
