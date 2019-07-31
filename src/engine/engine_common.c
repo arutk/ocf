@@ -419,52 +419,81 @@ void ocf_engine_evict(struct ocf_request *req)
 	ocf_engine_map(req);
 }
 
-int ocf_engine_map_and_lock(struct ocf_request *req, ocf_engine_lock lock_cls)
+int ocf_engine_map_and_lock(struct ocf_request *req,
+		ocf_engine_trylock trylock_cls, ocf_engine_lock lock_cls)
 {
 	bool mapped;
 	bool promote = true;
 	int lock = -ENOENT;
 
+	/* calculate hashes for hash-bucket locking */
 	ocf_req_hash(req);
-	ocf_req_hash_lock_rd(req); /*- Metadata READ access, No eviction --------*/
 
-	/* Travers to check if request is mapped fully */
+	/* Read-lock hash buckets associated with request target core & LBAs
+	 * (core lines) to assure that cache mapping for these core lines does
+	 * not change during traversation */
+	ocf_req_hash_lock_rd(req);
+
+	/* Traverse request to cache if there is hit */
 	ocf_engine_traverse(req);
-
 	mapped = ocf_engine_is_mapped(req);
+
 	if (mapped) {
-		/* All cache line are mapped, lock request for WRITE access */
-		lock = lock_cls(req);
+		/* We are holding hash buckets read lock, so we can attempt
+		 * per-cacheline locking fast path, which would fail either if
+		 * cachelines are already locked or if there is a concurrent
+		 * attempt to lock these cachelines */
+		lock = trylock_cls(req);
+
+		if (lock == OCF_LOCK_ACQUIRED) {
+			ocf_req_hash_unlock_rd(req);
+		} else {
+			/* Failed to acquire cachelines lock in fast path,
+			 * acquire hash-buckets write lock and attempt the lock
+			 * again, allowing slow path and async assignment of
+			 * the lock. */
+			ocf_req_hash_lock_upgrade(req);
+			lock = lock_cls(req);
+			ocf_req_hash_unlock_wr(req);
+		}
 	} else {
 		promote = ocf_promotion_req_should_promote(
 				req->cache->promotion_policy, req);
 		/* TODO: what better way to propagate this error code ? */
-		if (!promote)
+		if (!promote) {
 			req->info.mapping_error = 1;
+			ocf_req_hash_unlock_rd(req);
+		}
 	}
 
-	if (mapped || !promote) {
-		ocf_req_hash_unlock_rd(req);
-	} else {
-		/* need to attempt mapping / eviction */
-		ocf_req_hash_lock_upgrade(req); /*- Metadata WR access, eviction -----*/
+	if (!mapped && promote) {
+		/* Need to map (potentially evict) cachelines. Mapping must be
+		 * performed holding (at least) hash-bucket write lock */
+		ocf_req_hash_lock_upgrade(req);
+
 		ocf_engine_map(req);
-		ocf_req_hash_unlock_wr(req); /*- END Metadata WR access ---------*/
+		if (!req->info.mapping_error) {
+			/* Lock cachelines allowing for slow path */
+			lock = trylock_cls(req);
+			if (lock != OCF_LOCK_ACQUIRED)
+				lock = lock_cls(req);
+		}
+
+		ocf_req_hash_unlock_wr(req);
 
 		if (req->info.mapping_error) {
+			/* Still not mapped - evict cachelines under global
+			 * metadata write lock */
 			ocf_metadata_start_exclusive_access(req->cache);
-			/* Now there is exclusive access for metadata. May
-			 * traverse once again and evict cachelines if needed.
-			 */
 			ocf_engine_evict(req);
+			if (!req->info.mapping_error) {
+				lock = trylock_cls(req);
+				if (lock != OCF_LOCK_ACQUIRED)
+					lock = lock_cls(req);
+			}
 			ocf_metadata_end_exclusive_access(req->cache);
 		}
-
-		if (!req->info.mapping_error) {
-			lock = lock_cls(req);
-		}
 	}
-
 
 	return lock;
 }

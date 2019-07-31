@@ -50,6 +50,7 @@ uint32_t ocf_cache_line_concurrency_suspended_no(struct ocf_cache *cache);
  */
 size_t ocf_cache_line_concurrency_size_of(struct ocf_cache *cache);
 
+/* TODO: comments */
 /**
  * @brief Lock OCF request for WRITE access (Lock all cache lines in map info)
  *
@@ -63,7 +64,9 @@ size_t ocf_cache_line_concurrency_size_of(struct ocf_cache *cache);
  * added into waiting list. When lock will be acquired io_if->resume be called
  */
 int ocf_req_trylock_wr(struct ocf_request *req);
+int ocf_req_lock_wr(struct ocf_request *req);
 
+/* TODO: comments */
 /**
  * @brief Lock OCF request for READ access (Lock all cache lines in map info)
  *
@@ -77,6 +80,7 @@ int ocf_req_trylock_wr(struct ocf_request *req);
  * added into waiting list. When lock will be acquired io_if->resume be called
  */
 int ocf_req_trylock_rd(struct ocf_request *req);
+int ocf_req_lock_rd(struct ocf_request *req);
 
 /**
  * @brief Unlock OCF request from WRITE access

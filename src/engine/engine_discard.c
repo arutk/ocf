@@ -234,7 +234,13 @@ static int _ocf_discard_step(struct ocf_request *req)
 		lock = OCF_LOCK_ACQUIRED;
 	}
 
-	ocf_req_hash_unlock_rd(req);
+	if (lock != OCF_LOCK_ACQUIRED) {
+		ocf_req_hash_lock_upgrade(req);
+		lock = ocf_req_lock_rd(req);
+		ocf_req_hash_unlock_wr(req);
+	} else {
+		ocf_req_hash_unlock_rd(req);
+	}
 
 	if (lock >= 0) {
 		if (OCF_LOCK_ACQUIRED == lock) {

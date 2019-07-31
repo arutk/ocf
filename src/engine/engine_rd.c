@@ -209,6 +209,14 @@ static const struct ocf_io_if _io_if_read_generic_resume = {
 	.resume = ocf_engine_on_resume,
 };
 
+static int _ocf_read_request_trylock_cls(struct ocf_request *req)
+{
+	if (ocf_engine_is_hit(req))
+		return ocf_req_trylock_rd(req);
+	else
+		return ocf_req_trylock_wr(req);
+}
+
 static int _ocf_read_request_lock_cls(struct ocf_request *req)
 {
 	if (ocf_engine_is_hit(req))
@@ -236,7 +244,8 @@ int ocf_read_generic(struct ocf_request *req)
 	/* Set resume call backs */
 	req->io_if = &_io_if_read_generic_resume;
 
-	lock = ocf_engine_map_and_lock(req, _ocf_read_request_lock_cls);
+	lock = ocf_engine_map_and_lock(req, _ocf_read_request_trylock_cls,
+			_ocf_read_request_lock_cls);
 
 	if (req->info.mapping_error) {
 		ocf_req_clear(req);

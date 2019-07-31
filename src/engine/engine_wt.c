@@ -171,7 +171,8 @@ int ocf_write_wt(struct ocf_request *req)
 	/* Set resume io_if */
 	req->io_if = &_io_if_wt_resume;
 
-	lock = ocf_engine_map_and_lock(req, ocf_req_trylock_wr);
+	lock = ocf_engine_map_and_lock(req, ocf_req_trylock_wr,
+		ocf_req_lock_wr);
 
 	if (!req->info.mapping_error) {
 		if (lock >= 0) {

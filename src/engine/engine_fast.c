@@ -204,9 +204,16 @@ int ocf_write_fast(struct ocf_request *req)
 	if (mapped) {
 		ocf_io_start(&req->ioi.io);
 		lock = ocf_req_trylock_wr(req);
+		if (lock != OCF_LOCK_ACQUIRED) {
+			ocf_req_hash_lock_upgrade(req);
+			lock = ocf_req_lock_wr(req);
+			ocf_req_hash_unlock_wr(req);
+		} else {
+			ocf_req_hash_unlock_rd(req);
+		}
+	} else {
+		ocf_req_hash_unlock_rd(req);
 	}
-
-	ocf_req_hash_unlock_rd(req);
 
 	if (mapped) {
 		if (lock >= 0) {

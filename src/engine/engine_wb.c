@@ -178,7 +178,10 @@ int ocf_write_wb(struct ocf_request *req)
 
 	/* TODO: Handle fits into dirty */
 
-	lock = ocf_engine_map_and_lock(req, ocf_req_trylock_wr);
+	ocf_req_hash(req);
+
+	lock = ocf_engine_map_and_lock(req, ocf_req_trylock_wr,
+			ocf_req_lock_wr);
 
 	if (!req->info.mapping_error) {
 		if (lock >= 0) {
