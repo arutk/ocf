@@ -324,8 +324,6 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 	ocf_error_t result;
 
 	/* Lock to ensure consistency */
-	OCF_METADATA_LOCK_WR();
-
 	__init_hash_table(cache);
 	__init_freelist(cache);
 	__init_partitions_attached(cache);
@@ -334,7 +332,6 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 	if (result) {
 		ocf_cache_log(cache, log_err,
 				"Cannot initialize cleaning policy\n");
-		OCF_METADATA_UNLOCK_WR();
 		return result;
 	}
 
@@ -344,24 +341,19 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 		ocf_cache_log(cache, log_err,
 				"Cannot initialize promotion policy\n");
 		__deinit_cleaning_policy(cache);
-		OCF_METADATA_UNLOCK_WR();
 		return result;
 	}
-
-	OCF_METADATA_UNLOCK_WR();
 
 	return 0;
 }
 
 static void init_attached_data_structures_recovery(ocf_cache_t cache)
 {
-	OCF_METADATA_LOCK_WR();
 	__init_hash_table(cache);
 	__init_freelist(cache);
 	__init_partitions_attached(cache);
 	__reset_stats(cache);
 	__init_metadata_version(cache);
-	OCF_METADATA_UNLOCK_WR();
 }
 
 /****************************************************************

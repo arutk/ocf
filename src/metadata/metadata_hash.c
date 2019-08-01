@@ -1947,7 +1947,7 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 	uint64_t core_line;
 	unsigned char step = 0;
 
-	OCF_METADATA_LOCK_WR();
+	ocf_metadata_start_exclusive_access(cache);
 
 	for (cline = 0; cline < cache->device->collision_table_entries; cline++) {
 		ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
@@ -1967,7 +1967,7 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 		OCF_COND_RESCHED(step, 128);
 	}
 
-	OCF_METADATA_UNLOCK_WR();
+	ocf_metadata_end_exclusive_access(cache);
 
 	ocf_pipeline_next(pipeline);
 }
