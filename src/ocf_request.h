@@ -200,6 +200,10 @@ struct ocf_request {
 	struct ocf_req_info info;
 	/*!< Detailed request info */
 
+	uint32_t first_hash_bucket;
+	/*!< Index of (first) core line with minimal hash bucket within this
+	 * request */
+
 	void (*complete)(struct ocf_request *ocf_req, int error);
 	/*!< Request completion function */
 
@@ -318,6 +322,9 @@ void ocf_req_clear_info(struct ocf_request *req);
  * @param req - OCF request
  */
 void ocf_req_clear_map(struct ocf_request *req);
+
+/* TODO comment */
+void ocf_req_hash(struct ocf_request *req);
 
 /**
  * @brief Clear OCF request

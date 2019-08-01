@@ -464,9 +464,10 @@ struct ocf_metadata {
 		/*!< true if metadata used in volatile mode (RAM only) */
 
 	struct {
-		env_rwsem collision; /*!< lock for collision table */
+		env_rwsem global; /*!< global metadata lock (GML) */
 		env_rwlock status; /*!< Fast lock for status bits */
 		env_spinlock eviction; /*!< Fast lock for eviction policy */
+		env_rwsem *hash;
 	} lock;
 };
 
