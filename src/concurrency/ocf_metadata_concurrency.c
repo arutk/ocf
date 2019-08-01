@@ -4,6 +4,7 @@
  */
 
 #include "ocf_metadata_concurrency.h"
+#include "../metadata/metadata_misc.h"
 
 void ocf_metadata_concurrency_init(struct ocf_cache *cache)
 {
@@ -104,6 +105,42 @@ int ocf_metadata_hash_try_lock(struct ocf_cache *cache,
 		return -1;
 
 	return 0;
+}
+
+
+/* NOTE: attempt to acquire hash lock for multiple core lines may end up
+ * in deadlock. In order to hash lock multiple core lines safely, use
+ * ocf_req_hash_lock_* functions */
+void ocf_metadata_hash_lock_rd(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line)
+{
+	ocf_metadata_start_shared_access(cache);
+	ocf_metadata_hash_lock(cache, ocf_metadata_hash_func(cache, core_line,
+			core_id), OCF_METADATA_RD);
+}
+
+void ocf_metadata_hash_unlock_rd(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line)
+{
+	ocf_metadata_hash_unlock(cache, ocf_metadata_hash_func(cache, core_line,
+			core_id), OCF_METADATA_RD);
+	ocf_metadata_end_shared_access(cache);
+}
+
+void ocf_metadata_hash_lock_wr(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line)
+{
+	ocf_metadata_start_shared_access(cache);
+	ocf_metadata_hash_lock(cache, ocf_metadata_hash_func(cache, core_line,
+			core_id), OCF_METADATA_WR);
+}
+
+void ocf_metadata_hash_unlock_wr(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line)
+{
+	ocf_metadata_hash_unlock(cache, ocf_metadata_hash_func(cache, core_line,
+			core_id), OCF_METADATA_WR);
+	ocf_metadata_end_shared_access(cache);
 }
 
 /* Iterate over hash buckets for all core lines in the request. Each hash bucket

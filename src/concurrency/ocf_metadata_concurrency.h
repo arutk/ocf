@@ -89,12 +89,17 @@ static inline void ocf_metadata_status_bits_unlock(
 #define OCF_METADATA_BITS_UNLOCK_WR() \
 		ocf_metadata_status_bits_unlock(cache, OCF_METADATA_WR)
 
-void ocf_metadata_hash_lock(struct ocf_cache *cache, ocf_cache_line_t hash,
-		int rw);
-void ocf_metadata_hash_unlock(struct ocf_cache *cache, ocf_cache_line_t hash,
-		int rw);
-int ocf_metadata_hash_try_lock(struct ocf_cache *cache, ocf_cache_line_t hash,
-		int rw);
+void ocf_metadata_hash_lock_rd(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line);
+void ocf_metadata_hash_unlock_rd(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line);
+void ocf_metadata_hash_lock_wr(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line);
+void ocf_metadata_hash_unlock_wr(struct ocf_cache *cache, uint32_t core_id,
+		uint64_t core_line);
+
+
+/* lock entire request in deadlock-free manner */
 void ocf_req_hash_lock_rd(struct ocf_request *req);
 void ocf_req_hash_unlock_rd(struct ocf_request *req);
 void ocf_req_hash_lock_wr(struct ocf_request *req);
