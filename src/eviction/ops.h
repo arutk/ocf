@@ -25,7 +25,7 @@ static inline void ocf_eviction_init_cache_line(struct ocf_cache *cache,
 	ENV_BUG_ON(type >= ocf_eviction_max);
 
 	if (likely(evict_policy_ops[type].init_cline))
-		evict_policy_ops[type].init_cline(cache, line);
+		evict_policy_ops[type].init_cline(cache, part_id, line);
 }
 
 static inline void ocf_eviction_purge_cache_line(

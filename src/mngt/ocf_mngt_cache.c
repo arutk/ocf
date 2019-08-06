@@ -21,6 +21,7 @@
 #include "../concurrency/ocf_concurrency.h"
 #include "../eviction/ops.h"
 #include "../ocf_ctx_priv.h"
+#include "../ocf_freelist.h"
 #include "../cleaning/cleaning.h"
 
 #define OCF_ASSERT_PLUGGED(cache) ENV_BUG_ON(!(cache)->device)
@@ -135,6 +136,8 @@ struct ocf_cache_attach_context {
 			/*!< underlying cores are opened (happens only during
 			 * load or recovery
 			 */
+
+		bool freelist_inited : 1;
 
 		bool concurrency_inited : 1;
 	} flags;
@@ -1059,7 +1062,10 @@ static void _ocf_mngt_attach_prepare_metadata(ocf_pipeline_t pipeline,
 				&cache->device->runtime_meta->user_parts[i];
 	}
 
-	cache->device->freelist_part = &cache->device->runtime_meta->freelist_part;
+	cache->freelist = ocf_freelist_init(cache);
+	if (!cache->freelist)
+		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_START_CACHE_FAIL);
+	context->flags.freelist_inited = true;
 
 	ret = ocf_concurrency_init(cache);
 	if (ret)
@@ -1215,6 +1221,9 @@ static void _ocf_mngt_attach_handle_error(
 
 	if (context->flags.concurrency_inited)
 		ocf_concurrency_deinit(cache);
+
+	if (context->flags.freelist_inited)
+		ocf_freelist_deinit(cache->freelist);
 
 	if (context->flags.volume_inited)
 		ocf_volume_deinit(&cache->device->volume);
@@ -1787,6 +1796,7 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
 
 	ocf_metadata_deinit_variable_size(cache);
 	ocf_concurrency_deinit(cache);
+	ocf_freelist_deinit(cache->freelist);
 
 	ocf_volume_deinit(&cache->device->volume);
 

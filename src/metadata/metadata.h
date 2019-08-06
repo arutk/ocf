@@ -227,4 +227,10 @@ static inline bool ocf_metadata_line_size_is_valid(uint32_t size)
 	}
 }
 
+static inline ocf_cache_line_t ocf_metadata_collision_table_entries(
+		struct ocf_cache *cache)
+{
+	return cache->device->collision_table_entries;
+}
+
 #endif /* METADATA_H_ */

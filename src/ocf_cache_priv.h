@@ -82,8 +82,6 @@ struct ocf_cache_device {
 
 	uint64_t metadata_offset;
 
-	struct ocf_part *freelist_part;
-
 	struct {
 		struct ocf_cache_line_concurrency *cache_line;
 	} concurrency;
@@ -109,6 +107,8 @@ struct ocf_cache {
 	struct ocf_user_part user_parts[OCF_IO_CLASS_MAX + 1];
 
 	struct ocf_metadata metadata;
+
+	struct ocf_freelist *freelist;
 
 	ocf_eviction_t eviction_policy_init;
 

@@ -79,6 +79,8 @@ static void add_lru_head(ocf_cache_t cache, int partition_id,
 
 	ocf_metadata_get_evicition_policy(cache, collision_index, &eviction);
 
+	eviction.lru.part_id = partition_id;
+
 	/* First node to be added/ */
 	if ((cline_dirty && !part->runtime->eviction.policy.lru.has_dirty_nodes) ||
 	    (!cline_dirty && !part->runtime->eviction.policy.lru.has_clean_nodes)) {
@@ -250,12 +252,14 @@ static void remove_lru_list(ocf_cache_t cache, int partition_id,
 
 /*-- End of LRU functions*/
 
-void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+void evp_lru_init_cline(ocf_cache_t cache, ocf_part_id_t part_id,
+		ocf_cache_line_t cline)
 {
 	union eviction_policy_meta eviction;
 
 	ocf_metadata_get_evicition_policy(cache, cline, &eviction);
 
+	eviction.lru.part_id = part_id;
 	eviction.lru.prev = cache->device->collision_table_entries;
 	eviction.lru.next = cache->device->collision_table_entries;
 

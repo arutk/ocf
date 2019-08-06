@@ -8,7 +8,7 @@
 #include "eviction.h"
 #include "lru_structs.h"
 
-void evp_lru_init_cline(struct ocf_cache *cache,
+void evp_lru_init_cline(struct ocf_cache *cache, ocf_part_id_t part_id,
 		ocf_cache_line_t cline);
 void evp_lru_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 bool evp_lru_can_evict(struct ocf_cache *cache);

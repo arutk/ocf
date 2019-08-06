@@ -10,6 +10,7 @@ struct lru_eviction_policy_meta {
 	/* LRU pointers 2*4=8 bytes */
 	uint32_t prev;
 	uint32_t next;
+	ocf_part_id_t part_id;
 } __attribute__((packed));
 
 struct lru_eviction_policy {

@@ -58,8 +58,6 @@ struct ocf_superblock_config {
  * @brief OCF cache metadata runtime superblock
  */
 struct ocf_superblock_runtime {
-	struct ocf_part freelist_part;
-
 	struct ocf_user_part_runtime user_parts[OCF_IO_CLASS_MAX + 1];
 
 	uint32_t cleaning_thread_access;

@@ -705,5 +705,4 @@ unsigned env_get_execution_context(void);
 void env_put_execution_context(void);
 unsigned env_get_execution_context_count(void);
 
-
 #endif /* __OCF_ENV_H__ */

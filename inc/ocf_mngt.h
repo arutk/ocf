@@ -304,6 +304,11 @@ struct ocf_mngt_cache_config {
 	 * @brief If set, try to submit all I/O in fast path.
 	 */
 	bool use_submit_io_fast;
+
+	/**
+ 	 * @brief number of execution contexts
+ 	 */
+	unsigned execution_context_count;
 };
 
 /**
