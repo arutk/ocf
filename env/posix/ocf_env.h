@@ -89,6 +89,11 @@ static inline void *env_zalloc(size_t size, int flags)
 	return ptr;
 }
 
+static inline void *env_realloc(void *ptr, size_t size, int flags)
+{
+	return realloc(ptr, size);
+}
+
 static inline void env_free(const void *ptr)
 {
 	free((void *)ptr);
@@ -700,5 +705,9 @@ static inline void env_gettimeofday(struct env_timeval *tv)
 uint32_t env_crc32(uint32_t crc, uint8_t const *data, size_t len);
 
 #define ENV_PRIu64 "lu"
+
+/* Hardcode execution context count for simplicity - typically this would be
+ * the number of CPUs submittint I/O */
+#define env_get_execution_context_count() 1
 
 #endif /* __OCF_ENV_H__ */

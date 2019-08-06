@@ -257,6 +257,7 @@ int ocf_volume_is_atomic(ocf_volume_t volume);
  *
  * @param[in] volume Volume
  * @param[in] queue IO queue handle
+ * @param[in] execution_ctx IO execution context
  * @param[in] addr OCF IO destination address
  * @param[in] bytes OCF IO size in bytes
  * @param[in] dir OCF IO direction

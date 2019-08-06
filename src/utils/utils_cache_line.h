@@ -86,12 +86,14 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
  * @brief Set cache line invalid without flush
  *
  * @param cache Cache instance
+ * @param TODO
  * @param start_bit Start bit of cache line for which state will be set
  * @param end_bit End bit of cache line for which state will be set
  * @param line Cache line to invalid
  */
-void set_cache_line_invalid_no_flush(struct ocf_cache *cache, uint8_t start_bit,
-		uint8_t end_bit, ocf_cache_line_t line);
+void set_cache_line_invalid_no_flush(struct ocf_cache *cache,
+		unsigned freelist_idx, uint8_t start_bit, uint8_t end_bit,
+		ocf_cache_line_t line);
 
 /**
  * @brief Set cache line valid

@@ -31,6 +31,14 @@ int ocf_queue_create(ocf_cache_t cache, ocf_queue_t *queue,
 		return -OCF_ERR_NO_MEM;
 	}
 
+	tmp_queue->freelist_idx = ocf_freelist_new(&cache->freelist_pool,
+			tmp_queue);
+	if (tmp_queue->freelist_idx < 0) {
+		env_vfree(tmp_queue);
+		ocf_mngt_cache_put(cache);
+		return tmp_queue->freelist_idx;
+	}
+
 	env_atomic_set(&tmp_queue->io_no, 0);
 	env_spinlock_init(&tmp_queue->io_list_lock);
 	INIT_LIST_HEAD(&tmp_queue->io_list);
@@ -39,6 +47,7 @@ int ocf_queue_create(ocf_cache_t cache, ocf_queue_t *queue,
 	tmp_queue->ops = ops;
 
 	list_add(&tmp_queue->list, &cache->io_queues);
+	++cache->io_queue_count;
 
 	*queue = tmp_queue;
 
@@ -59,6 +68,8 @@ void ocf_queue_put(ocf_queue_t queue)
 	if (env_atomic_dec_return(&queue->ref_count) == 0) {
 		list_del(&queue->list);
 		queue->ops->stop(queue);
+		ocf_freelist_del(&queue->cache->freelist_pool,
+				queue->freelist_idx);
 		ocf_mngt_cache_put(queue->cache);
 		env_free(queue);
 	}

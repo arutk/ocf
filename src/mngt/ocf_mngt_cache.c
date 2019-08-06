@@ -21,6 +21,7 @@
 #include "../concurrency/ocf_concurrency.h"
 #include "../eviction/ops.h"
 #include "../ocf_ctx_priv.h"
+#include "../ocf_freelist.h"
 #include "../cleaning/cleaning.h"
 
 #define OCF_ASSERT_PLUGGED(cache) ENV_BUG_ON(!(cache)->device)
@@ -124,6 +125,9 @@ struct ocf_cache_attach_context {
 
 		bool attached_metadata_inited : 1;
 			/*!< attached metadata sections initialized */
+
+		bool freelist_pool_inited : 1;
+			/*!< freelist pool structures initialized */
 
 		bool device_opened : 1;
 			/*!< underlying device volume is open */
@@ -1059,7 +1063,10 @@ static void _ocf_mngt_attach_prepare_metadata(ocf_pipeline_t pipeline,
 				&cache->device->runtime_meta->user_parts[i];
 	}
 
-	cache->device->freelist_part = &cache->device->runtime_meta->freelist_part;
+	/* prepare freelist pool */
+	if (ocf_freelist_pool_init(&cache->freelist_pool, cache))
+		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_START_CACHE_FAIL);
+	context->flags.freelist_pool_inited = true;
 
 	ret = ocf_concurrency_init(cache);
 	if (ret)
@@ -1207,6 +1214,9 @@ static void _ocf_mngt_attach_handle_error(
 	if (context->flags.cores_opened)
 		_ocf_mngt_close_all_uninitialized_cores(cache);
 
+	if (context->flags.freelist_pool_inited)
+		ocf_freelist_pool_deinit(&cache->freelist_pool);
+
 	if (context->flags.attached_metadata_inited)
 		ocf_metadata_deinit_variable_size(cache);
 
@@ -1318,9 +1328,38 @@ static void _ocf_mngt_cache_set_valid(ocf_cache_t cache)
 	env_bit_set(ocf_cache_state_running, &cache->cache_state);
 }
 
-static void _ocf_mngt_init_attached_nonpersistent(ocf_cache_t cache)
+/*
+static int _ocf_mngt_del_freelists(ocf_cache_t cache)
+	struct ocf_freelist *freelist;
+
+	list_for_each_entry(freelist, &cache->freelist_pool->list, list) {
+		ocf_freelist_del(freelist);
+}
+
+static int _ocf_mngt_alloc_freelists(ocf_cache_t cache)
 {
-	env_atomic_set(&cache->fallback_pt_error_counter, 0);
+	ocf_queue_t queue;
+	int ret = 0;
+
+	list_for_each_entry(queue, &cache->io_queues, list) {
+		queue->freelist = ocf_freelist_new(&cache->freelist_pool);
+		if (!tmp_queue->freelist) {
+			ret = -OCF_ERR_NO_MEM;
+			break;
+		}
+	}
+
+	if (ret)
+		_ocf_mngt_del_freelists(cache);
+
+	return ret;
+}
+*/
+
+static int _ocf_mngt_init_attached_nonpersistent(ocf_cache_t cache)
+{
+	/* TODO: restore old implementation */
+	return 0;
 }
 
 static void _ocf_mngt_attach_check_ram(ocf_pipeline_t pipeline,
@@ -1619,10 +1658,14 @@ static void _ocf_mngt_cache_attach(ocf_cache_t cache,
 				ocf_init_mode_load : ocf_init_mode_init;
 	}
 
-	_ocf_mngt_init_attached_nonpersistent(cache);
+	result = _ocf_mngt_init_attached_nonpersistent(cache);
+	if (result)
+		goto err_init_nonpersistent;
+
 
 	OCF_PL_NEXT_RET(pipeline);
 
+err_init_nonpersistent:
 err_uuid:
 	env_vfree(data);
 err_pipeline:
@@ -1732,6 +1775,9 @@ int ocf_mngt_cache_set_mngt_queue(ocf_cache_t cache, ocf_queue_t queue)
 	ocf_queue_get(queue);
 	cache->mngt_queue = queue;
 
+	/* don't want to maintain freelist for management queue */
+	ocf_freelist_del(&cache->freelist_pool, queue->freelist_idx);
+
 	return 0;
 }
 
@@ -1787,6 +1833,7 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
 
 	ocf_metadata_deinit_variable_size(cache);
 	ocf_concurrency_deinit(cache);
+	ocf_freelist_detach(&cache->freelist_pool);
 
 	ocf_volume_deinit(&cache->device->volume);
 
@@ -1795,7 +1842,7 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
 
 	/* TODO: this should be removed from detach after 'attached' stats
 		are better separated in statistics */
-	_ocf_mngt_init_attached_nonpersistent(cache);
+	env_atomic_set(&cache->fallback_pt_error_counter, 0);
 
 	context->cmpl(context->priv, error ? -OCF_ERR_WRITE_CACHE : 0);
 }

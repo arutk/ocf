@@ -22,10 +22,10 @@ static inline ocf_cache_line_t ocf_metadata_hash_func(ocf_cache_t cache,
 }
 
 void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
-		ocf_cache_line_t cache_line);
+		unsigned freelist_idx, ocf_cache_line_t cache_line);
 
-int ocf_metadata_sparse_range(struct ocf_cache *cache, int core_id,
-			uint64_t start_byte, uint64_t end_byte);
+int ocf_metadata_sparse_range(struct ocf_cache *cache,
+			int core_id, uint64_t start_byte, uint64_t end_byte);
 
 typedef void (*ocf_metadata_actor_t)(struct ocf_cache *cache,
 		ocf_cache_line_t cache_line);

@@ -7,6 +7,7 @@
 #include "../ocf_priv.h"
 #include "../ocf_cache_priv.h"
 #include "../ocf_queue_priv.h"
+#include "../ocf_freelist.h"
 #include "engine_common.h"
 #define OCF_ENGINE_DEBUG_IO_NAME "common"
 #include "engine_debug.h"
@@ -251,18 +252,11 @@ static void ocf_engine_map_cache_line(struct ocf_request *req,
 	ocf_part_id_t part_id = req->part_id;
 	ocf_cleaning_t clean_policy_type;
 
-	if (cache->device->freelist_part->curr_size == 0) {
+	if (ocf_freelist_get_cache_line(&cache->freelist_pool,
+			req->io_queue->freelist_idx, cache_line)) {
 		req->info.mapping_error = 1;
 		return;
 	}
-
-	*cache_line = cache->device->freelist_part->head;
-
-	/* add_to_collision_list changes .next_col and other fields for entry
-	 * so updated last_cache_line_give must be updated before calling it.
-	 */
-
-	ocf_metadata_remove_from_free_list(cache, *cache_line);
 
 	ocf_metadata_add_to_partition(cache, part_id, *cache_line);
 
@@ -302,8 +296,9 @@ static void ocf_engine_map_hndl_error(struct ocf_cache *cache,
 		case LOOKUP_MAPPED:
 			OCF_DEBUG_RQ(req, "Canceling cache line %u",
 					entry->coll_idx);
-			set_cache_line_invalid_no_flush(cache, 0,
-					ocf_line_end_sector(cache),
+			set_cache_line_invalid_no_flush(cache,
+					ocf_req_get_freelist_idx(req),
+					0, ocf_line_end_sector(cache),
 					entry->coll_idx);
 			break;
 
@@ -326,9 +321,8 @@ void ocf_engine_map(struct ocf_request *req)
 	if (!ocf_engine_unmapped_count(req))
 		return;
 
-	/* TODO FIXME ajrutkow: make this thread-safe */
 	if (ocf_engine_unmapped_count(req) >
-			cache->device->freelist_part->curr_size) {
+			ocf_freelist_get_free_count(&cache->freelist_pool)) {
 		req->info.mapping_error = 1;
 		return;
 	}

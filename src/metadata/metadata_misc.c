@@ -5,6 +5,7 @@
 
 #include "ocf/ocf.h"
 #include "metadata.h"
+#include "../ocf_freelist.h"
 #include "../utils/utils_cache_line.h"
 
 static bool _is_cache_line_acting(struct ocf_cache *cache,
@@ -91,7 +92,7 @@ int ocf_metadata_actor(struct ocf_cache *cache,
  * and the metadata lock
  */
 void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
-		uint32_t cache_line)
+		unsigned freelist_idx, uint32_t cache_line)
 {
 	ocf_part_id_t partition_id =
 			ocf_metadata_get_partition_id(cache, cache_line);
@@ -100,14 +101,15 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 
 	ocf_metadata_remove_from_partition(cache, partition_id, cache_line);
 
-	ocf_metadata_add_to_free_list(cache, cache_line);
+	ocf_freelist_put_cache_line(&cache->freelist_pool, freelist_idx,
+			cache_line);
 }
 
 static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
-	set_cache_line_invalid_no_flush(cache, 0, ocf_line_end_sector(cache),
-			cache_line);
+	set_cache_line_invalid_no_flush(cache, UNSPECIFIED_FREELIST_IDX, 0,
+			ocf_line_end_sector(cache), cache_line);
 
 	/*
 	 * This is especially for removing inactive core
@@ -118,9 +120,18 @@ static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 /* caller must hold metadata lock
  * set core_id to -1 to clean the whole cache device
  */
-int ocf_metadata_sparse_range(struct ocf_cache *cache, int core_id,
-			  uint64_t start_byte, uint64_t end_byte)
+int ocf_metadata_sparse_range(struct ocf_cache *cache,
+			int core_id, uint64_t start_byte, uint64_t end_byte)
 {
-	return ocf_metadata_actor(cache, PARTITION_INVALID, core_id,
+	int ret;
+
+	ret = ocf_metadata_actor(cache, PARTITION_INVALID, core_id,
 		start_byte, end_byte, _ocf_metadata_sparse_cache_line);
+
+	if (ret)
+		return ret;
+
+	// TODO: balance freelist
+	return ret;
+
 }

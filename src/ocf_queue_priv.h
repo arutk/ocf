@@ -28,6 +28,8 @@ struct ocf_queue {
 
 	const struct ocf_queue_ops *ops;
 
+	int freelist_idx;
+
 	void *priv;
 };
 
@@ -37,6 +39,11 @@ static inline void ocf_queue_kick(ocf_queue_t queue, bool allow_sync)
 		queue->ops->kick_sync(queue);
 	else
 		queue->ops->kick(queue);
+}
+
+static inline void ocf_queue_set_freelist(ocf_queue_t q, int idx)
+{
+	q->freelist_idx = idx;
 }
 
 #endif

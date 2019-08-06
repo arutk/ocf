@@ -169,7 +169,8 @@ static inline bool ocf_seq_cutoff_is_on(ocf_cache_t cache)
 	if (!ocf_cache_is_device_attached(cache))
 		return false;
 
-	return (cache->device->freelist_part->curr_size <= SEQ_CUTOFF_FULL_MARGIN);
+	return (ocf_freelist_get_free_count(&cache->freelist_pool) <=
+			SEQ_CUTOFF_FULL_MARGIN);
 }
 
 bool ocf_seq_cutoff_check(ocf_core_t core, uint32_t dir, uint64_t addr,

@@ -103,6 +103,8 @@ static inline void list_move_tail(struct list_head *it, struct list_head *l1)
 #define list_first_entry(list_head_i, item_type, field_name) \
 	list_entry((list_head_i)->next, item_type, field_name)
 
+#define list_next(list_head_i) ((list_head_i)->next)
+
 /**
  * @param iterator uninitialized list_head pointer, to be used as iterator
  * @param plist list head (main node)

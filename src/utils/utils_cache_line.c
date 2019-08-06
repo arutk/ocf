@@ -19,9 +19,10 @@ static inline void ocf_cleaning_set_hot_cache_line(struct ocf_cache *cache,
 	}
 }
 
-static void __set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
-		uint8_t end_bit, ocf_cache_line_t line,
-		ocf_core_id_t core_id, ocf_part_id_t part_id)
+static void __set_cache_line_invalid(struct ocf_cache *cache,
+		unsigned freelist_idx, uint8_t start_bit, uint8_t end_bit,
+		ocf_cache_line_t line, ocf_core_id_t core_id,
+		ocf_part_id_t part_id)
 {
 	ocf_core_t core;
 	bool is_valid;
@@ -45,7 +46,7 @@ static void __set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 	 */
 	if (!is_valid && !ocf_cache_line_are_waiters(cache, line)) {
 		ocf_purge_eviction_policy(cache, line);
-		ocf_metadata_sparse_cache_line(cache, line);
+		ocf_metadata_sparse_cache_line(cache, freelist_idx, line);
 	}
 }
 
@@ -53,6 +54,7 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, struct ocf_request *req, uint32_t map_idx)
 {
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
+	unsigned freelist_idx;
 	ocf_part_id_t part_id;
 	ocf_core_id_t core_id;
 
@@ -60,24 +62,26 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 
 	part_id = ocf_metadata_get_partition_id(cache, line);
 	core_id = ocf_core_get_id(req->core);
+	freelist_idx = ocf_req_get_freelist_idx(req);
 
-	__set_cache_line_invalid(cache, start_bit, end_bit, line, core_id,
-			part_id);
+	__set_cache_line_invalid(cache, freelist_idx, start_bit, end_bit, line,
+			core_id, part_id);
 
 	ocf_metadata_flush_mark(cache, req, map_idx, INVALID, start_bit,
 			end_bit);
 }
 
-void set_cache_line_invalid_no_flush(struct ocf_cache *cache, uint8_t start_bit,
-		uint8_t end_bit, ocf_cache_line_t line)
+void set_cache_line_invalid_no_flush(struct ocf_cache *cache,
+		unsigned freelist_idx, uint8_t start_bit, uint8_t end_bit,
+		ocf_cache_line_t line)
 {
 	ocf_part_id_t part_id;
 	ocf_core_id_t core_id;
 
 	ocf_metadata_get_core_and_part_id(cache, line, &core_id, &part_id);
 
-	__set_cache_line_invalid(cache, start_bit, end_bit, line, core_id,
-			part_id);
+	__set_cache_line_invalid(cache, freelist_idx, start_bit, end_bit,
+			line, core_id, part_id);
 }
 
 void set_cache_line_valid(struct ocf_cache *cache, uint8_t start_bit,

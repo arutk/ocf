@@ -13,6 +13,7 @@
 #include "../utils/utils_pipeline.h"
 #include "../ocf_def_priv.h"
 #include "../ocf_priv.h"
+#include "../ocf_freelist.h"
 
 #define OCF_METADATA_HASH_DEBUG 0
 
@@ -1016,15 +1017,12 @@ static inline void _ocf_init_collision_entry(struct ocf_cache *cache,
 /*
  * Default initialization of freelist partition
  */
-static void ocf_metadata_hash_init_freelist_seq(struct ocf_cache *cache)
+static void _ocf_metadata_hash_init_collision_seq(struct ocf_cache *cache)
 {
 	uint32_t step = 0;
 	unsigned int i = 0;
 	ocf_cache_line_t collision_table_entries =
 			cache->device->collision_table_entries;
-
-	cache->device->freelist_part->head = 0;
-	cache->device->freelist_part->curr_size = cache->device->collision_table_entries;
 
 	/* hash_father is an index in hash_table and it's limited
 	 * to the hash_table_entries
@@ -1037,14 +1035,10 @@ static void ocf_metadata_hash_init_freelist_seq(struct ocf_cache *cache)
 		OCF_COND_RESCHED_DEFAULT(step);
 	}
 
-	cache->device->freelist_part->tail = i;
 	_ocf_init_collision_entry(cache, i, collision_table_entries, i - 1);
 }
 
-/*
- * Modified initialization of freelist partition
- */
-static void ocf_metadata_hash_init_freelist_striping(
+static void _ocf_metadata_hash_init_collision_striping(
 		struct ocf_cache *cache)
 {
 	uint32_t step = 0;
@@ -1059,9 +1053,6 @@ static void ocf_metadata_hash_init_freelist_striping(
 		ctrl->raw_desc[metadata_segment_collision].entries_in_page;
 	unsigned int pages =
 		ctrl->raw_desc[metadata_segment_collision].ssd_pages;
-
-	cache->device->freelist_part->head = 0;
-	cache->device->freelist_part->curr_size = cache->device->collision_table_entries;
 
 	/* Modified initialization procedure */
 	prev = next = collision_table_entries;
@@ -1103,8 +1094,52 @@ static void ocf_metadata_hash_init_freelist_striping(
 	}
 
 	/* Terminate free list */
-	cache->device->freelist_part->tail = idx;
 	ocf_metadata_set_partition_next(cache, idx, collision_table_entries);
+
+}
+
+static void _ocf_metadata_hash_init_freelist(struct ocf_cache* cache)
+{
+	ocf_cache_line_t collision_table_entries =
+			cache->device->collision_table_entries;
+	unsigned num_freelists;
+	unsigned freelist_idx;
+	uint64_t size;
+	ocf_cache_line_t cl;
+	unsigned i;
+
+	ocf_freelist_attach(&cache->freelist_pool, collision_table_entries);
+	num_freelists = ocf_freelist_get_count(&cache->freelist_pool);
+
+	cl = 0;
+	freelist_idx = 0;
+	while (cl != collision_table_entries) {
+		/* calculate number of elements for collision list */
+		size = collision_table_entries / num_freelists;
+		if (freelist_idx < (collision_table_entries % num_freelists))
+			++size;
+
+		for (i = 0; i < size; ++i, cl = ocf_metadata_get_collision_next(
+				cache, cl)) {
+			ENV_BUG_ON(cl == collision_table_entries);
+			ocf_freelist_put_cache_line(&cache->freelist_pool,
+					freelist_idx, cl);
+		}
+
+		++freelist_idx;
+	}
+}
+
+static void ocf_metadata_hash_init_freelist_seq(struct ocf_cache* cache)
+{
+	_ocf_metadata_hash_init_collision_seq(cache);
+	_ocf_metadata_hash_init_freelist(cache);
+}
+
+static void ocf_metadata_hash_init_freelist_striping(struct ocf_cache *cache)
+{
+	_ocf_metadata_hash_init_collision_striping(cache);
+	_ocf_metadata_hash_init_freelist(cache);
 }
 
 
@@ -1879,7 +1914,7 @@ static void _recovery_rebuild_cline_metadata(ocf_cache_t cache,
 
 	part_id = PARTITION_DEFAULT;
 
-	ocf_metadata_remove_from_free_list(cache, cache_line);
+	ocf_freelist_remove_cache_line(&cache->freelist_pool, cache_line);
 
 	ocf_metadata_add_to_partition(cache, part_id, cache_line);
 

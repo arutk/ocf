@@ -40,7 +40,7 @@ static uint32_t ocf_evict_calculate(struct ocf_user_part *part,
 	return to_evict;
 }
 
-static inline uint32_t ocf_evict_do(ocf_cache_t cache,
+static inline uint32_t ocf_evict_do(ocf_cache_t cache, unsigned freelist_idx,
 		ocf_queue_t io_queue, const uint32_t evict_cline_no,
 		ocf_part_id_t target_part_id)
 {
@@ -83,8 +83,8 @@ static inline uint32_t ocf_evict_do(ocf_cache_t cache,
 			continue;
 		}
 
-		evicted += ocf_eviction_need_space(cache, io_queue,
-				part_id, to_evict);
+		evicted += ocf_eviction_need_space(cache, freelist_idx,
+				io_queue, part_id, to_evict);
 	}
 
 	if (!ocf_eviction_can_evict(cache))
@@ -94,8 +94,8 @@ static inline uint32_t ocf_evict_do(ocf_cache_t cache,
 		/* Now we can evict form targeted partition */
 		to_evict = ocf_evict_calculate(target_part, evict_cline_no);
 		if (to_evict) {
-			evicted += ocf_eviction_need_space(cache, io_queue,
-					target_part_id, to_evict);
+			evicted += ocf_eviction_need_space(cache, freelist_idx,
+					io_queue, target_part_id, to_evict);
 		}
 	}
 
@@ -107,13 +107,15 @@ int space_managment_evict_do(struct ocf_cache *cache,
 		struct ocf_request *req, uint32_t evict_cline_no)
 {
 	uint32_t evicted;
+	uint32_t free;
 
-	if (evict_cline_no <= cache->device->freelist_part->curr_size)
+	free = ocf_freelist_get_free_count(&cache->freelist_pool);
+	if (evict_cline_no <= free)
 		return LOOKUP_MAPPED;
 
-	evict_cline_no -= cache->device->freelist_part->curr_size;
-	evicted = ocf_evict_do(cache, req->io_queue, evict_cline_no,
-			req->part_id);
+	evict_cline_no -= free;
+	evicted = ocf_evict_do(cache, ocf_req_get_freelist_idx(req),
+			req->io_queue, evict_cline_no, req->part_id);
 
 	if (evict_cline_no <= evicted)
 		return LOOKUP_MAPPED;

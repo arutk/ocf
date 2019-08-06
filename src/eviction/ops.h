@@ -25,7 +25,7 @@ static inline void ocf_eviction_init_cache_line(struct ocf_cache *cache,
 	ENV_BUG_ON(type >= ocf_eviction_max);
 
 	if (likely(evict_policy_ops[type].init_cline))
-		evict_policy_ops[type].init_cline(cache, line);
+		evict_policy_ops[type].init_cline(cache, part_id, line);
 }
 
 static inline void ocf_eviction_purge_cache_line(
@@ -54,7 +54,8 @@ static inline bool ocf_eviction_can_evict(struct ocf_cache *cache)
 }
 
 static inline uint32_t ocf_eviction_need_space(struct ocf_cache *cache,
-		ocf_queue_t io_queue, ocf_part_id_t part_id, uint32_t clines)
+		unsigned freelist_idx, ocf_queue_t io_queue,
+		ocf_part_id_t part_id, uint32_t clines)
 {
 	uint8_t type;
 	uint32_t result = 0;
@@ -68,8 +69,8 @@ static inline uint32_t ocf_eviction_need_space(struct ocf_cache *cache,
 		 * This is called under METADATA WR lock. No need to get
 		 * eviction lock.
 		 */
-		result = evict_policy_ops[type].req_clines(cache, io_queue,
-				part_id, clines);
+		result = evict_policy_ops[type].req_clines(cache, freelist_idx,
+				io_queue, part_id, clines);
 	}
 
 	return result;

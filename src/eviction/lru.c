@@ -79,6 +79,8 @@ static void add_lru_head(ocf_cache_t cache, int partition_id,
 
 	ocf_metadata_get_evicition_policy(cache, collision_index, &eviction);
 
+	eviction.lru.part_id = partition_id;
+
 	/* First node to be added/ */
 	if ((cline_dirty && !part->runtime->eviction.policy.lru.has_dirty_nodes) ||
 	    (!cline_dirty && !part->runtime->eviction.policy.lru.has_clean_nodes)) {
@@ -250,12 +252,14 @@ static void remove_lru_list(ocf_cache_t cache, int partition_id,
 
 /*-- End of LRU functions*/
 
-void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+void evp_lru_init_cline(ocf_cache_t cache, ocf_part_id_t part_id,
+		ocf_cache_line_t cline)
 {
 	union eviction_policy_meta eviction;
 
 	ocf_metadata_get_evicition_policy(cache, cline, &eviction);
 
+	eviction.lru.part_id = part_id;
 	eviction.lru.prev = cache->device->collision_table_entries;
 	eviction.lru.next = cache->device->collision_table_entries;
 
@@ -390,8 +394,8 @@ bool evp_lru_can_evict(ocf_cache_t cache)
 }
 
 /* the caller must hold the metadata lock */
-uint32_t evp_lru_req_clines(ocf_cache_t cache, ocf_queue_t io_queue,
-		ocf_part_id_t part_id, uint32_t cline_no)
+uint32_t evp_lru_req_clines(ocf_cache_t cache, unsigned freelist_idx,
+		ocf_queue_t io_queue, ocf_part_id_t part_id, uint32_t cline_no)
 {
 	uint32_t i;
 	ocf_cache_line_t curr_cline, prev_cline;
@@ -432,7 +436,7 @@ uint32_t evp_lru_req_clines(ocf_cache_t cache, ocf_queue_t io_queue,
 			evp_lru_zero_line(cache, io_queue, curr_cline);
 
 		} else {
-			set_cache_line_invalid_no_flush(cache, 0,
+			set_cache_line_invalid_no_flush(cache, freelist_idx, 0,
 					ocf_line_end_sector(cache),
 					curr_cline);
 
