@@ -6,6 +6,7 @@
 #include "ocf_env.h"
 #include <sched.h>
 #include <execinfo.h>
+#include <sched.h>
 
 struct _env_allocator {
 	/*!< Memory pool ID unique name */
@@ -140,3 +141,22 @@ uint32_t env_crc32(uint32_t crc, uint8_t const *data, size_t len)
 {
 	return crc32(crc, data, len);
 }
+
+unsigned env_get_execution_context(void)
+{
+	unsigned cpu = sched_getcpu();
+
+	return (cpu == -1) ? 0 : cpu;
+}
+
+void env_put_execution_context(void)
+{
+}
+
+unsigned env_get_execution_context_count(void)
+{
+	int num = sysconf(_SC_NPROCESSORS_ONLN);
+
+	return (num == -1) ? 0 : num;
+}
+
