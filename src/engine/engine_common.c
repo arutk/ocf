@@ -15,6 +15,8 @@
 #include "../utils/utils_cleaner.h"
 #include "../metadata/metadata.h"
 #include "../eviction/eviction.h"
+#include "../promotion/promotion.h"
+#include "../concurrency/ocf_concurrency.h"
 
 void ocf_engine_error(struct ocf_request *req,
 		bool stop_cache, const char *msg)
@@ -417,6 +419,55 @@ void ocf_engine_evict(struct ocf_request *req)
 	ocf_engine_map(req);
 }
 
+int ocf_engine_map_and_lock(struct ocf_request *req, ocf_engine_lock lock_cls)
+{
+	bool mapped;
+	bool promote = true;
+	int lock = -ENOENT;
+
+	ocf_req_hash(req);
+	ocf_req_hash_lock_rd(req); /*- Metadata READ access, No eviction --------*/
+
+	/* Travers to check if request is mapped fully */
+	ocf_engine_traverse(req);
+
+	mapped = ocf_engine_is_mapped(req);
+	if (mapped) {
+		/* All cache line are mapped, lock request for WRITE access */
+		lock = lock_cls(req);
+	} else {
+		promote = ocf_promotion_req_should_promote(
+				req->cache->promotion_policy, req);
+		/* TODO: what better way to propagate this error code ? */
+		if (!promote)
+			req->info.mapping_error = 1;
+	}
+
+	if (mapped || !promote) {
+		ocf_req_hash_unlock_rd(req);
+	} else {
+		/* need to attempt mapping / eviction */
+		ocf_req_hash_lock_upgrade(req); /*- Metadata WR access, eviction -----*/
+		ocf_engine_map(req);
+		ocf_req_hash_unlock_wr(req); /*- END Metadata WR access ---------*/
+
+		if (req->info.mapping_error) {
+			ocf_metadata_start_exclusive_access(req->cache);
+			/* Now there is exclusive access for metadata. May
+			 * traverse once again and evict cachelines if needed.
+			 */
+			ocf_engine_evict(req);
+			ocf_metadata_end_exclusive_access(req->cache);
+		}
+
+		if (!req->info.mapping_error) {
+			lock = lock_cls(req);
+		}
+	}
+
+
+	return lock;
+}
 
 static int _ocf_engine_clean_getter(struct ocf_cache *cache,
 		void *getter_context, uint32_t item, ocf_cache_line_t *line)

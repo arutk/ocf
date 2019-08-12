@@ -209,12 +209,18 @@ static const struct ocf_io_if _io_if_read_generic_resume = {
 	.resume = ocf_engine_on_resume,
 };
 
+static int _ocf_read_request_lock_cls(struct ocf_request *req)
+{
+	if (ocf_engine_is_hit(req))
+		return ocf_req_trylock_rd(req);
+	else
+		return ocf_req_trylock_wr(req);
+}
+
 int ocf_read_generic(struct ocf_request *req)
 {
-	bool mapped;
 	int lock = OCF_LOCK_NOT_ACQUIRED;
 	struct ocf_cache *cache = req->cache;
-	bool promote = true;
 
 	ocf_io_start(&req->ioi.io);
 
@@ -230,64 +236,9 @@ int ocf_read_generic(struct ocf_request *req)
 	/* Set resume call backs */
 	req->io_if = &_io_if_read_generic_resume;
 
-	/* calculate hashes for hash-bucket locking */
-	ocf_req_hash(req);
+	lock = ocf_engine_map_and_lock(req, _ocf_read_request_lock_cls);
 
-	/*- Metadata RD access -----------------------------------------------*/
-	ocf_req_hash_lock_rd(req);
-	/* Traverse request to cache if there is hit */
-	ocf_engine_traverse(req);
-
-	mapped = ocf_engine_is_mapped(req);
-	if (mapped) {
-		/* Request is fully mapped, no need to call eviction */
-		if (ocf_engine_is_hit(req)) {
-			/* There is a hit, lock request for READ access */
-			lock = ocf_req_trylock_rd(req);
-		} else {
-			/* All cache line mapped, but some sectors are not valid
-			 * and cache insert will be performed - lock for
-			 * WRITE is required
-			 */
-			lock = ocf_req_trylock_wr(req);
-		}
-	} else {
-		promote = ocf_promotion_req_should_promote(
-				cache->promotion_policy, req);
-	}
-
-	if (mapped || !promote) {
-		ocf_req_hash_unlock_rd(req);
-	} else {
-		/*- Metadata RD access ---------------------------------------*/
-		ocf_req_hash_lock_upgrade(req);
-		ocf_engine_map(req);
-		ocf_req_hash_unlock_wr(req);
-
-		if (req->info.mapping_error) {
-			/* Still not mapped - evict cachelines under global
-			 * metadata write lock */
-			ocf_metadata_start_exclusive_access(req->cache);
-			ocf_engine_evict(req);
-			ocf_metadata_end_exclusive_access(req->cache);
-		}
-
-		if (!req->info.mapping_error) {
-			if (ocf_engine_is_hit(req)) {
-				/* After mapping turns out there is hit,
-				 * so lock OCF request for read access
-				 */
-				lock = ocf_req_trylock_rd(req);
-			} else {
-				/* Miss, new cache lines were mapped,
-				 * need to lock OCF request for write access
-				 */
-				lock = ocf_req_trylock_wr(req);
-			}
-		}
-	}
-
-	if (promote && !req->info.mapping_error) {
+	if (!req->info.mapping_error) {
 		if (lock >= 0) {
 			if (lock != OCF_LOCK_ACQUIRED) {
 				/* Lock was not acquired, need to wait for resume */

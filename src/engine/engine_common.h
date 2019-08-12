@@ -174,6 +174,10 @@ void ocf_engine_map(struct ocf_request *req);
 /* TODO: comment */
 void ocf_engine_evict(struct ocf_request *req);
 
+typedef int (*ocf_engine_trylock)(struct ocf_request *);
+typedef int (*ocf_engine_lock)(struct ocf_request *);
+
+int ocf_engine_map_and_lock(struct ocf_request *req, ocf_engine_lock lock_cls);
 /**
  * @brief Traverse OCF request (lookup cache)
  *

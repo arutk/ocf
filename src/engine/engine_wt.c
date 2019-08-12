@@ -161,9 +161,7 @@ static const struct ocf_io_if _io_if_wt_resume = {
 
 int ocf_write_wt(struct ocf_request *req)
 {
-	bool mapped;
 	int lock = OCF_LOCK_NOT_ACQUIRED;
-	bool promote = true;
 
 	ocf_io_start(&req->ioi.io);
 
@@ -173,44 +171,9 @@ int ocf_write_wt(struct ocf_request *req)
 	/* Set resume io_if */
 	req->io_if = &_io_if_wt_resume;
 
-	ocf_req_hash(req);
-	ocf_req_hash_lock_rd(req); /*- Metadata READ access, No eviction --------*/
+	lock = ocf_engine_map_and_lock(req, ocf_req_trylock_wr);
 
-	/* Travers to check if request is mapped fully */
-	ocf_engine_traverse(req);
-
-	mapped = ocf_engine_is_mapped(req);
-	if (mapped) {
-		/* All cache line are mapped, lock request for WRITE access */
-		lock = ocf_req_trylock_wr(req);
-	} else {
-		promote = ocf_promotion_req_should_promote(
-				req->cache->promotion_policy, req);
-	}
-
-	if (mapped || !promote) {
-		ocf_req_hash_unlock_rd(req);
-	} else {
-		/*- Metadata RD access ---------------------------------------*/
-		ocf_req_hash_lock_upgrade(req);
-		ocf_engine_map(req);
-		ocf_req_hash_unlock_wr(req);
-
-		if (req->info.mapping_error) {
-			/* Still not mapped - evict cachelines under global
-			 * metadata write lock */
-			ocf_metadata_start_exclusive_access(req->cache);
-			ocf_engine_evict(req);
-			ocf_metadata_end_exclusive_access(req->cache);
-		}
-
-		if (!req->info.mapping_error) {
-			/* Lock request for WRITE access */
-			lock = ocf_req_trylock_wr(req);
-		}
-	}
-
-	if (promote && !req->info.mapping_error) {
+	if (!req->info.mapping_error) {
 		if (lock >= 0) {
 			if (lock != OCF_LOCK_ACQUIRED) {
 				/* WR lock was not acquired, need to wait for resume */
