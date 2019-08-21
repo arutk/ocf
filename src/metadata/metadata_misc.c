@@ -101,7 +101,7 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 
 	ocf_metadata_remove_from_partition(cache, partition_id, cache_line);
 
-	ocf_freelist_put_cache_line(cache, cache_line);
+	ocf_freelist_put_cache_line(cache->freelist, cache_line);
 }
 
 static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,

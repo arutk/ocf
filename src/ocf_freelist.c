@@ -101,6 +101,53 @@ void ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 	_ocf_freelist_remove_cache_line(freelist, 0, cline);
 }
 
+void ocf_freelist_split(ocf_freelist_t freelist)
+{
+	unsigned num_freelists = freelist->count;
+	ocf_cache_line_t line_entries = ocf_metadata_collision_table_entries(
+							freelist->cache);
+	ocf_cache_t cache = freelist->cache;
+	ocf_cache_line_t cl;
+	unsigned freelist_idx;
+	unsigned i;
+	int size;
+
+	cl = 0;
+	freelist_idx = 0;
+	while (cl != line_entries) {
+		/* set prev for the first element on current free list */
+		ocf_metadata_set_partition_prev(cache, cl, line_entries);
+
+		/* calculate number of elements for collision list */
+		size = line_entries / num_freelists;
+		if (freelist_idx < (line_entries % num_freelists))
+			++size;
+
+		ENV_BUG_ON(size == 0);
+
+		/* remember freelist head and size */
+		freelist->part[freelist_idx].head = cl;
+		env_atomic_set(&freelist->part[freelist_idx].curr_size, size);
+
+		/* iterate to the last element */
+		i = 0;
+		while (i < size - 1) {
+			cl = ocf_metadata_get_partition_next(cache, cl);
+			i++;
+		}
+		ENV_BUG_ON(cl == line_entries);
+
+		/* set next for the last element on current free list */
+		ocf_metadata_set_partition_next(cache, cl, line_entries);
+
+		/* remember freelist tail */
+		freelist->part[freelist_idx].tail = cl;
+
+		/* move to the next element */
+		cl = ocf_metadata_get_partition_next(cache, cl);
+	}
+}
+
 static void ocf_freelist_add_cache_line(ocf_freelist_t freelist,
 		uint32_t ctx, ocf_cache_line_t line)
 {
@@ -258,7 +305,7 @@ void ocf_freelist_deinit(ocf_freelist_t freelist)
 }
 
 
-int ocf_freelist_get_count(ocf_freelist_t freelist)
+unsigned ocf_freelist_get_count(ocf_freelist_t freelist)
 {
-	return env_atomic_read(&freelist->count);
+	return freelist->count;
 }
