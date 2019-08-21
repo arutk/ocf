@@ -252,7 +252,7 @@ static void ocf_engine_map_cache_line(struct ocf_request *req,
 	ocf_part_id_t part_id = req->part_id;
 	ocf_cleaning_t clean_policy_type;
 
-	if (ocf_freelist_get_cache_line(cache, cache_line)) {
+	if (ocf_freelist_get_cache_line(cache->freelist, cache_line)) {
 		req->info.mapping_error = 1;
 		return;
 	}
@@ -320,7 +320,7 @@ void ocf_engine_map(struct ocf_request *req)
 		return;
 
 	if (ocf_engine_unmapped_count(req) >
-			env_atomic_read(&cache->freelist.total_free)) {
+			ocf_freelist_get_count(cache->freelist)) {
 		req->info.mapping_error = 1;
 		return;
 	}

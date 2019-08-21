@@ -16,18 +16,18 @@ struct ocf_freelist {
 	env_spinlock *lock;
 };
 
-static void ocf_freelist_lock(struct ocf_freelist *freelist, uint32_t ctx)
+static void ocf_freelist_lock(ocf_freelist_t freelist, uint32_t ctx)
 {
 	env_spinlock_lock(&freelist->lock[ctx]);
 }
 
-static void ocf_freelist_unlock(struct ocf_freelist *freelist, uint32_t ctx)
+static void ocf_freelist_unlock(ocf_freelist_t freelist, uint32_t ctx)
 {
 	env_spinlock_unlock(&freelist->lock[ctx]);
 }
 
 /* Sets the given collision_index as the new _head_ of the Partition list. */
-static void _ocf_freelist_remove_cache_line(struct ocf_freelist *freelist,
+static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 		uint32_t ctx, ocf_cache_line_t cline)
 {
 	struct ocf_cache *cache = freelist->cache;
@@ -94,15 +94,15 @@ static void _ocf_freelist_remove_cache_line(struct ocf_freelist *freelist,
 	env_atomic_dec(&freelist->total_free);
 }
 
-void ocf_freelist_remove_cache_line(struct ocf_freelist *freelist,
+void ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t cline)
 {
 	/* TODO: Need to find freelist for given cache line */
 	_ocf_freelist_remove_cache_line(freelist, 0, cline);
 }
 
-static void ocf_freelist_add_cache_line(struct ocf_freelist *freelist, uint32_t ctx,
-		ocf_cache_line_t line)
+static void ocf_freelist_add_cache_line(ocf_freelist_t freelist,
+		uint32_t ctx, ocf_cache_line_t line)
 {
 	struct ocf_cache *cache = freelist->cache;
 	struct ocf_part *freelist_part = &freelist->part[ctx];
@@ -135,7 +135,7 @@ static void ocf_freelist_add_cache_line(struct ocf_freelist *freelist, uint32_t 
 	env_atomic_inc(&freelist->total_free);
 }
 
-static int ocf_freelist_get_cache_line_ctx(struct ocf_freelist *freelist,
+static int ocf_freelist_get_cache_line_ctx(ocf_freelist_t freelist,
 		uint32_t ctx, ocf_cache_line_t *cline)
 {
 	if (env_atomic_read(&freelist->part[ctx].curr_size) == 0)
@@ -155,7 +155,7 @@ static int ocf_freelist_get_cache_line_ctx(struct ocf_freelist *freelist,
 	return 0;
 }
 
-static int get_next_freelist(struct ocf_freelist *freelist)
+static int get_next_freelist(ocf_freelist_t freelist)
 {
 	int ctx, next;
 
@@ -168,7 +168,7 @@ static int get_next_freelist(struct ocf_freelist *freelist)
 	return ctx;
 }
 
-static int ocf_freelist_get_cache_line_slow(struct ocf_freelist *freelist,
+static int ocf_freelist_get_cache_line_slow(ocf_freelist_t freelist,
 		ocf_cache_line_t *cline)
 {
 	int i, ctx;
@@ -182,7 +182,7 @@ static int ocf_freelist_get_cache_line_slow(struct ocf_freelist *freelist,
 	return -ENOSPC;
 }
 
-static int ocf_freelist_get_cache_line_fast(struct ocf_freelist *freelist,
+static int ocf_freelist_get_cache_line_fast(ocf_freelist_t freelist,
 		ocf_cache_line_t *cline)
 {
 	int res;
@@ -195,7 +195,7 @@ static int ocf_freelist_get_cache_line_fast(struct ocf_freelist *freelist,
 	return res;
 }
 
-int ocf_freelist_get_cache_line(struct ocf_freelist *freelist,
+int ocf_freelist_get_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t *cline)
 {
 
@@ -208,7 +208,7 @@ int ocf_freelist_get_cache_line(struct ocf_freelist *freelist,
 	return 0;
 }
 
-void ocf_freelist_put_cache_line(struct ocf_freelist *freelist,
+void ocf_freelist_put_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t cline)
 {
 	uint32_t ctx = env_get_execution_context();
@@ -218,11 +218,11 @@ void ocf_freelist_put_cache_line(struct ocf_freelist *freelist,
 	env_put_execution_context();
 }
 
-struct ocf_freelist *ocf_freelist_init(struct ocf_cache *cache)
+ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache)
 {
 	uint32_t num;
 	int i;
-	struct ocf_freelist *freelist;
+	ocf_freelist_t freelist;
 
 	freelist = env_vzalloc(sizeof(*freelist));
 	if (!freelist)
@@ -249,7 +249,7 @@ struct ocf_freelist *ocf_freelist_init(struct ocf_cache *cache)
 	return freelist;
 }
 
-void ocf_freelist_deinit(struct ocf_freelist *freelist)
+void ocf_freelist_deinit(ocf_freelist_t freelist)
 {
 	// TODO: deinit locks
 	env_vfree(freelist->lock);
@@ -257,3 +257,8 @@ void ocf_freelist_deinit(struct ocf_freelist *freelist)
 	env_vfree(freelist);
 }
 
+
+int ocf_freelist_get_count(ocf_freelist_t freelist)
+{
+	return env_atomic_read(&freelist->count);
+}

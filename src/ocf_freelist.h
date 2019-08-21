@@ -10,11 +10,17 @@
 
 struct ocf_freelist;
 
-struct ocf_freelist *ocf_freelist_init(struct ocf_cache *cache);
-void ocf_freelist_deinit(struct ocf_freelist *freelist);
+typedef struct ocf_freelist *ocf_freelist_t;
 
-int ocf_freelist_get_cache_line(struct ocf_cache *cache, ocf_cache_line_t *cline);
-void ocf_freelist_put_cache_line(struct ocf_cache *cache, ocf_cache_line_t cline);
-void ocf_freelist_remove_cache_line(struct ocf_cache *cache, ocf_cache_line_t cline);
+ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache);
+void ocf_freelist_deinit(ocf_freelist_t freelist);
 
+int ocf_freelist_get_cache_line(ocf_freelist_t freelist,
+		ocf_cache_line_t *cline);
+void ocf_freelist_put_cache_line(ocf_freelist_t freelist,
+		ocf_cache_line_t cline);
+void ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
+		ocf_cache_line_t cline);
+
+int ocf_freelist_get_count(ocf_freelist_t freelist);
 #endif /* __OCF_FREELIST_H__ */

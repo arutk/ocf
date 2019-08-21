@@ -21,6 +21,7 @@
 #include "ocf_logger_priv.h"
 #include "ocf/ocf_trace.h"
 #include "promotion/promotion.h"
+#include "ocf_freelist.h"
 
 #define DIRTY_FLUSHED 1
 #define DIRTY_NOT_FLUSHED 0
@@ -108,7 +109,7 @@ struct ocf_cache {
 
 	struct ocf_metadata metadata;
 
-	struct ocf_freelist *freelist;
+	ocf_freelist_t freelist;
 
 	ocf_eviction_t eviction_policy_init;
 

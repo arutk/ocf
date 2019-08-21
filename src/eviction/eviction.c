@@ -109,7 +109,7 @@ int space_managment_evict_do(struct ocf_cache *cache,
 	uint32_t evicted;
 	uint32_t free;
 
-	free = env_atomic_read(&cache->freelist.total_free);
+	free = ocf_freelist_get_count(cache->freelist);
 	if (evict_cline_no <= free)
 		return LOOKUP_MAPPED;
 
