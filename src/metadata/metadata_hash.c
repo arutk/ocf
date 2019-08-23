@@ -1872,8 +1872,6 @@ static void _recovery_rebuild_cline_metadata(ocf_cache_t cache,
 
 	part_id = PARTITION_DEFAULT;
 
-	ocf_freelist_remove_cache_line(cache->freelist, cache_line);
-
 	ocf_metadata_add_to_partition(cache, part_id, cache_line);
 
 	hash_index = ocf_metadata_hash_func(cache, core_line, core_id);
@@ -1959,6 +1957,8 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 
 		OCF_COND_RESCHED(step, 128);
 	}
+
+	init_freelist(core->runtime_meta->cached_clines)
 
 	ocf_metadata_end_exclusive_access(cache);
 

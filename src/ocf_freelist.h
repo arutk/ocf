@@ -22,8 +22,6 @@ int ocf_freelist_get_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t *cline);
 void ocf_freelist_put_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t cline);
-void ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
-		ocf_cache_line_t cline);
 
 unsigned ocf_freelist_get_count(ocf_freelist_t freelist);
 

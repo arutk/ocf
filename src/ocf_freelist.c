@@ -94,14 +94,7 @@ static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 	env_atomic_dec(&freelist->total_free);
 }
 
-void ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
-		ocf_cache_line_t cline)
-{
-	/* TODO: Need to find freelist for given cache line */
-	_ocf_freelist_remove_cache_line(freelist, 0, cline);
-}
-
-void ocf_freelist_split(ocf_freelist_t freelist)
+void ocf_freelist_split(ocf_freelist_t freelist, uint64_t free_clines)
 {
 	unsigned num_freelists = freelist->count;
 	ocf_cache_line_t line_entries = ocf_metadata_collision_table_entries(
@@ -111,16 +104,19 @@ void ocf_freelist_split(ocf_freelist_t freelist)
 	unsigned freelist_idx;
 	unsigned i;
 	int size;
+	uint64_t processed = 0;
 
 	cl = 0;
 	freelist_idx = 0;
-	while (cl != line_entries) {
-		/* set prev for the first element on current free list */
+	while (processed < free_clines) {
+		cl = next_incvalid();
+		ENV_BUG_ON(cl == line_entries)
+
 		ocf_metadata_set_partition_prev(cache, cl, line_entries);
 
 		/* calculate number of elements for collision list */
-		size = line_entries / num_freelists;
-		if (freelist_idx < (line_entries % num_freelists))
+		size = free_clines / num_freelists;
+		if (freelist_idx < (free_clines % num_freelists))
 			++size;
 
 		ENV_BUG_ON(size == 0);
@@ -132,7 +128,7 @@ void ocf_freelist_split(ocf_freelist_t freelist)
 		/* iterate to the last element */
 		i = 0;
 		while (i < size - 1) {
-			cl = ocf_metadata_get_partition_next(cache, cl);
+			cl = next_incvalid(cache, cl);
 			i++;
 		}
 		ENV_BUG_ON(cl == line_entries);
@@ -270,6 +266,8 @@ ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache)
 	uint32_t num;
 	int i;
 	ocf_freelist_t freelist;
+	ocf_cache_line_t line_entries = ocf_metadata_collision_table_entries(
+							freelist->cache);
 
 	freelist = env_vzalloc(sizeof(*freelist));
 	if (!freelist)
@@ -291,6 +289,9 @@ ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache)
 
 	for (i = 0; i < num; i++) {
 		env_spinlock_init(&freelist->lock[i]);
+		freelist->part[i].head = line_entries;
+		freelist->part[i].tail = line_entries;
+		env_atomic_set(&freelist->part[i].curr_size, 0);
 	}
 
 	return freelist;
