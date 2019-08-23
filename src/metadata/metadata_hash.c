@@ -33,6 +33,8 @@
 
 static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		ocf_metadata_layout_t layout);
+static ocf_cache_line_t ocf_metadata_hash_map_phy2lg_striping(
+		struct ocf_cache *cache, ocf_cache_line_t cache_line);
 
 #define OCF_METADATA_HASH_DIFF_MAX 1000
 
@@ -2804,6 +2806,7 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	.init_variable_size = ocf_metadata_hash_init_variable_size,
 	.deinit_variable_size = ocf_metadata_hash_deinit_variable_size,
 	.init_hash_table = ocf_metadata_hash_init_hash_table,
+	.init_freelist = ocf_metadata_hash_init_freelisit,
 
 	.layout_iface = NULL,
 	.pages = ocf_metadata_hash_pages,
@@ -2895,12 +2898,10 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 
 static const struct ocf_metadata_layout_iface layout_ifaces[ocf_metadata_layout_max] = {
 	[ocf_metadata_layout_striping] = {
-		.init_freelist = ocf_metadata_hash_init_freelist_striping,
 		.lg2phy = ocf_metadata_hash_map_lg2phy_striping,
 		.phy2lg = ocf_metadata_hash_map_phy2lg_striping
 	},
 	[ocf_metadata_layout_seq] = {
-		.init_freelist = ocf_metadata_hash_init_freelist_seq,
 		.lg2phy = ocf_metadata_hash_map_lg2phy_seq,
 		.phy2lg = ocf_metadata_hash_map_phy2lg_seq
 	}
