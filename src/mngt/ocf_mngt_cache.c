@@ -190,18 +190,6 @@ static ocf_cache_id_t _ocf_mngt_cache_find_free_id(ocf_ctx_t owner)
 	return OCF_CACHE_ID_INVALID;
 }
 
-static void __init_hash_table(ocf_cache_t cache)
-{
-	/* Initialize hash table*/
-	ocf_metadata_init_hash_table(cache);
-}
-
-static void __init_freelist(ocf_cache_t cache)
-{
-	/* Initialize free list partition*/
-	ocf_metadata_init_freelist_partition(cache);
-}
-
 static void __init_partitions(ocf_cache_t cache)
 {
 	ocf_part_id_t i_part;
@@ -327,8 +315,9 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 	ocf_error_t result;
 
 	/* Lock to ensure consistency */
-	__init_hash_table(cache);
-	__init_freelist(cache);
+	ocf_metadata_init_hash_table(cache);
+	ocf_metadata_init_collision(cache);
+	ocf_metadata_init_freelist_partition(cache);
 	__init_partitions_attached(cache);
 
 	result = __init_cleaning_policy(cache);
@@ -352,8 +341,9 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 
 static void init_attached_data_structures_recovery(ocf_cache_t cache)
 {
-	__init_hash_table(cache);
-	__init_freelist(cache);
+	ocf_metadata_init_hash_table(cache);
+	ocf_metadata_init_collision(cache);
+	ocf_metadata_init_freelist_partition(cache);
 	__init_partitions_attached(cache);
 	__reset_stats(cache);
 	__init_metadata_version(cache);
@@ -548,6 +538,8 @@ static void _ocf_mngt_init_instance_clean_load(
 
 	ocf_metadata_load_all(cache,
 			_ocf_mngt_init_instance_load_complete, context);
+
+	ocf_metadata_init_freelist_partition(cache);
 }
 
 /**

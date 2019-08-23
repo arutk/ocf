@@ -1002,14 +1002,10 @@ finalize:
 }
 
 static inline void _ocf_init_collision_entry(struct ocf_cache *cache,
-		ocf_cache_line_t idx, ocf_cache_line_t next,
-		ocf_cache_line_t prev)
+		ocf_cache_line_t idx)
 {
 	ocf_cache_line_t invalid_idx = cache->device->collision_table_entries;
-	ocf_part_id_t invalid_part_id = PARTITION_INVALID;
 
-	ocf_metadata_set_partition_info(cache, idx,
-			invalid_part_id, next, prev);
 	ocf_metadata_set_collision_info(cache, idx, invalid_idx, invalid_idx);
 	ocf_metadata_set_core_info(cache, idx,
 			OCF_CORE_MAX, ULONG_MAX);
@@ -1017,90 +1013,52 @@ static inline void _ocf_init_collision_entry(struct ocf_cache *cache,
 }
 
 /*
- * Default initialization of freelist partition
+ * Modified initialization of freelist partition
  */
-static void ocf_metadata_hash_init_freelist_seq(struct ocf_cache* cache)
+static void ocf_metadata_hash_init_collision(struct ocf_cache *cache)
 {
-	uint32_t step = 0;
-	unsigned int i = 0;
-	ocf_cache_line_t collision_table_entries =
-			cache->device->collision_table_entries;
+	unsigned int i;
 
-	/* hash_father is an index in hash_table and it's limited
-	 * to the hash_table_entries
-	 * hash_table_entries is invalid index here.
-	 */
-	_ocf_init_collision_entry(cache, i, 1, collision_table_entries);
-
-	for (i = 1; i < collision_table_entries - 1; i++) {
-		_ocf_init_collision_entry(cache, i, i + 1, i - 1);
-		OCF_COND_RESCHED_DEFAULT(step);
+	for (i = 0; i < cache->device->collision_table_entries; i++) {
+		_ocf_init_collision_entry(cache, i);
 	}
-
-	_ocf_init_collision_entry(cache, i, collision_table_entries, i - 1);
-
-	ocf_freelist_split(cache->freelist);
 }
 
-static void ocf_metadata_hash_init_freelist_striping(
-		struct ocf_cache *cache)
+static inline void _ocf_init_partition_entry(struct ocf_cache *cache,
+		ocf_cache_line_t idx, ocf_cache_line_t next,
+		ocf_cache_line_t prev)
 {
-	uint32_t step = 0;
-	unsigned int i, j;
+	ocf_metadata_set_partition_info(cache, idx,
+			PARTITION_INVALID, next, prev);
+}
+
+/*
+ * Modified initialization of freelist partition
+ */
+static void ocf_metadata_hash_init_freelisit(struct ocf_cache *cache)
+{
+	unsigned int i;
 	ocf_cache_line_t prev, next;
-	ocf_cache_line_t idx, last_page;
+	ocf_cache_line_t idx;
 	ocf_cache_line_t collision_table_entries =
 			cache->device->collision_table_entries;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-	unsigned int entries_in_page =
-		ctrl->raw_desc[metadata_segment_collision].entries_in_page;
-	unsigned int pages =
-		ctrl->raw_desc[metadata_segment_collision].ssd_pages;
 
-	/* Modified initialization procedure */
-	prev = next = collision_table_entries;
-	last_page = pages;
-
-	for (i = 0; i < pages; i++) {
-		idx = i * entries_in_page;
-		for (j = 0; j < entries_in_page &&
-				idx < collision_table_entries; j++) {
-			next = idx + entries_in_page;
-
-			if (next >= collision_table_entries)
-				next = j + 1;
-
-			_ocf_init_collision_entry(cache, idx, next, prev);
-
-			if (idx >= entries_in_page - 1) {
-				prev = idx - entries_in_page + 1;
-			} else {
-				prev = last_page * entries_in_page + j;
-				if (prev >= collision_table_entries) {
-					prev -= entries_in_page;
-					last_page = pages - 1;
-				}
-			}
-
-			OCF_COND_RESCHED_DEFAULT(step);
-			idx++;
-		}
+	prev = collision_table_entries;
+	idx = 0;
+	for (i = 0; i < cache->device->collision_table_entries - 1; i++) {
+		next = ocf_metadata_map_phy2lg(cache, i + 1);
+		_ocf_init_partition_entry(cache, idx, next, prev);
+		prev = idx;
+		idx = next;
+		OCF_COND_RESCHED_DEFAULT(step);
 	}
+	_ocf_init_partition_entry(cache, idx, collision_table_entries, prev);
 
-	if (collision_table_entries < entries_in_page) {
-		idx = collision_table_entries - 1;
-	} else {
-		idx = pages * entries_in_page - 1;
-		if (idx >= collision_table_entries)
-			idx -= entries_in_page;
-
-	}
-
-	/* Terminate free list */
-	ocf_metadata_set_partition_next(cache, idx, collision_table_entries);
-
-	ocf_freelist_split(cache->freelist);
+	/* Initialize freelist partition */
+	cache->device->freelist_part->head = 0;
+	cache->device->freelist_part->tail = idx;
+	cache->device->freelist_part->curr_size = cache->device->
+			collision_table_entries;
 }
 
 /*
@@ -2806,6 +2764,7 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	.init_variable_size = ocf_metadata_hash_init_variable_size,
 	.deinit_variable_size = ocf_metadata_hash_deinit_variable_size,
 	.init_hash_table = ocf_metadata_hash_init_hash_table,
+	.init_collision = ocf_metadata_hash_init_collision,
 	.init_freelist = ocf_metadata_hash_init_freelisit,
 
 	.layout_iface = NULL,

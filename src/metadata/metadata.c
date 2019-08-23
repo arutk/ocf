@@ -67,6 +67,12 @@ void ocf_metadata_init_hash_table(struct ocf_cache *cache)
 	cache->metadata.iface.init_hash_table(cache);
 }
 
+void ocf_metadata_init_ollision(struct ocf_cache *cache)
+{
+	OCF_DEBUG_TRACE(cache);
+	cache->metadata.iface.init_collision(cache);
+}
+
 void ocf_metadata_deinit(struct ocf_cache *cache)
 {
 	OCF_DEBUG_TRACE(cache);

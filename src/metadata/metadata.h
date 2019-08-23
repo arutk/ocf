@@ -60,6 +60,9 @@ void ocf_metadata_init_freelist_partition(struct ocf_cache *cache);
  */
 void ocf_metadata_init_hash_table(struct ocf_cache *cache);
 
+/* TODO: comment */
+void ocf_metadata_init_collision(struct ocf_cache *cache);
+
 /**
  * @brief De-Initialize metadata
  *

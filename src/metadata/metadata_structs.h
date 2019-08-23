@@ -144,6 +144,9 @@ struct ocf_metadata_iface {
 	 */
 	void (*init_hash_table)(struct ocf_cache *cache);
 
+	/* TODO: comment */
+	void (*init_collision)(struct ocf_cache *cache);
+
 	/**
 	 * @brief De-Initialize metadata
 	 *
