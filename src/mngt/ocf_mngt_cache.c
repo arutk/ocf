@@ -226,6 +226,29 @@ static void __init_partitions_attached(ocf_cache_t cache)
 	}
 }
 
+static uint64_t cache_occupancy(ocf_cache_t cache)
+{
+	uint64_t occupancy = 0;
+	ocf_core_t i_core;
+	ocf_core_id_t i_core_id;
+
+	for_each_core(cache, i_core, i_core_id) {
+		occupancy += env_atomic_read(
+				&i_core->runtime_meta->cached_clines);
+	}
+
+	return occupancy;
+}
+
+
+static void __init_freelist_part(ocf_cache_t cache)
+{
+	uint64_t free_clines = cache->device->collision_table_entries -
+			cache_occupancy(cache);
+
+	ocf_freelist_part_init(cache->freelist, free_clines);
+}
+
 static ocf_error_t __init_cleaning_policy(ocf_cache_t cache)
 {
 	ocf_cleaning_t cleaning_policy = ocf_cleaning_default;
@@ -317,8 +340,8 @@ static ocf_error_t init_attached_data_structures(ocf_cache_t cache,
 	/* Lock to ensure consistency */
 	ocf_metadata_init_hash_table(cache);
 	ocf_metadata_init_collision(cache);
-	ocf_metadata_init_freelist_partition(cache);
 	__init_partitions_attached(cache);
+	__init_freelist_part(cache);
 
 	result = __init_cleaning_policy(cache);
 	if (result) {
@@ -343,8 +366,8 @@ static void init_attached_data_structures_recovery(ocf_cache_t cache)
 {
 	ocf_metadata_init_hash_table(cache);
 	ocf_metadata_init_collision(cache);
-	ocf_metadata_init_freelist_partition(cache);
 	__init_partitions_attached(cache);
+	__init_freelist_part(cache);
 	__reset_stats(cache);
 	__init_metadata_version(cache);
 }
@@ -538,8 +561,6 @@ static void _ocf_mngt_init_instance_clean_load(
 
 	ocf_metadata_load_all(cache,
 			_ocf_mngt_init_instance_load_complete, context);
-
-	ocf_metadata_init_freelist_partition(cache);
 }
 
 /**

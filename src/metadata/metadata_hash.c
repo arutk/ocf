@@ -1024,43 +1024,6 @@ static void ocf_metadata_hash_init_collision(struct ocf_cache *cache)
 	}
 }
 
-static inline void _ocf_init_partition_entry(struct ocf_cache *cache,
-		ocf_cache_line_t idx, ocf_cache_line_t next,
-		ocf_cache_line_t prev)
-{
-	ocf_metadata_set_partition_info(cache, idx,
-			PARTITION_INVALID, next, prev);
-}
-
-/*
- * Modified initialization of freelist partition
- */
-static void ocf_metadata_hash_init_freelisit(struct ocf_cache *cache)
-{
-	unsigned int i;
-	ocf_cache_line_t prev, next;
-	ocf_cache_line_t idx;
-	ocf_cache_line_t collision_table_entries =
-			cache->device->collision_table_entries;
-
-	prev = collision_table_entries;
-	idx = 0;
-	for (i = 0; i < cache->device->collision_table_entries - 1; i++) {
-		next = ocf_metadata_map_phy2lg(cache, i + 1);
-		_ocf_init_partition_entry(cache, idx, next, prev);
-		prev = idx;
-		idx = next;
-		OCF_COND_RESCHED_DEFAULT(step);
-	}
-	_ocf_init_partition_entry(cache, idx, collision_table_entries, prev);
-
-	/* Initialize freelist partition */
-	cache->device->freelist_part->head = 0;
-	cache->device->freelist_part->tail = idx;
-	cache->device->freelist_part->curr_size = cache->device->
-			collision_table_entries;
-}
-
 /*
  * Initialize hash table
  */
@@ -1897,10 +1860,12 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 	ocf_core_id_t core_id;
 	uint64_t core_line;
 	unsigned char step = 0;
+	const uint64_t collision_table_entries = cache->device->
+			collision_table_entries;
 
 	ocf_metadata_start_exclusive_access(cache);
 
-	for (cline = 0; cline < cache->device->collision_table_entries; cline++) {
+	for (cline = 0; cline < collision_table_entries; cline++) {
 		ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
 		if (core_id != OCF_CORE_MAX &&
 				(!dirty_only || metadata_test_dirty(cache,
@@ -1917,8 +1882,6 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 
 		OCF_COND_RESCHED(step, 128);
 	}
-
-	init_freelist(core->runtime_meta->cached_clines)
 
 	ocf_metadata_end_exclusive_access(cache);
 
@@ -2765,7 +2728,6 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	.deinit_variable_size = ocf_metadata_hash_deinit_variable_size,
 	.init_hash_table = ocf_metadata_hash_init_hash_table,
 	.init_collision = ocf_metadata_hash_init_collision,
-	.init_freelist = ocf_metadata_hash_init_freelisit,
 
 	.layout_iface = NULL,
 	.pages = ocf_metadata_hash_pages,

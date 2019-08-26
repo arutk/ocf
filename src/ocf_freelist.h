@@ -12,11 +12,13 @@ struct ocf_freelist;
 
 typedef struct ocf_freelist *ocf_freelist_t;
 
+/* init / deinit freelist runtime structures */
 ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache);
 void ocf_freelist_deinit(ocf_freelist_t freelist);
 
-/* split global freelist into per-context freelists */
-void ocf_freelist_split(ocf_freelist_t freelist);
+/* assign free cachelines to freelist partitions */
+void ocf_freelist_part_init(ocf_freelist_t freelist,
+		ocf_cache_line_t num_free_clines);
 
 int ocf_freelist_get_cache_line(ocf_freelist_t freelist,
 		ocf_cache_line_t *cline);

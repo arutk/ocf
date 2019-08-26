@@ -13,7 +13,7 @@
 struct ocf_part {
         ocf_cache_line_t head;
         ocf_cache_line_t tail;
-        env_atomic curr_size;
+        env_atomic64 curr_size;
 };
 
 struct ocf_user_part_config {

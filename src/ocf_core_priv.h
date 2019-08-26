@@ -102,6 +102,6 @@ void ocf_core_volume_type_deinit(ocf_ctx_t ctx);
 
 #define for_each_core(_cache, _core, _id) \
 	for_each_core_all(_cache, _core, _id) \
-		if (core->conf_meta->added)
+		if (_core->conf_meta->added)
 
 #endif /* __OCF_CORE_PRIV_H__ */
