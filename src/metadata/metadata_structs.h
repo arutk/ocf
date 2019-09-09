@@ -360,6 +360,8 @@ struct ocf_metadata_iface {
 	void (*set_collision_prev)(struct ocf_cache *cache,
 				ocf_cache_line_t line, ocf_cache_line_t prev);
 
+	uint64_t (*get_num_collision_pages)(struct ocf_cache *cache);
+
 	void (*get_partition_info)(struct ocf_cache *cache,
 			ocf_cache_line_t line, ocf_part_id_t *part_id,
 			ocf_cache_line_t *next_line,
@@ -434,7 +436,9 @@ struct ocf_metadata_lock
 	env_rwlock status; /*!< Fast lock for status bits */
 	env_spinlock eviction; /*!< Fast lock for eviction policy */
 	env_rwsem *hash; /*!< Hash bucket locks */
+	env_rwsem *collision_pages; /*!< Collision table page locks */
 	uint32_t num_hash_entries;  /*!< Hash bucket count */
+	uint64_t num_collision_pages; /*!< Collision table page count */
 	ocf_cache_t cache;  /*!< Parent cache object */
 };
 
