@@ -47,28 +47,26 @@ static bool _raw_ssd_page_is_valid(struct ocf_metadata_raw *raw, uint32_t page)
 /*******************************************************************************
  * RAW RAM Implementation
  ******************************************************************************/
-#define _RAW_RAM_ADDR(raw, line) \
-	(raw->mem_pool + (((uint64_t)raw->entry_size * (line))))
-
 #define _RAW_RAM_PAGE(raw, line) \
 		((line) / raw->entries_in_page)
 
 #define _RAW_RAM_PAGE_SSD(raw, line) \
-		(raw->ssd_pages_offset + _RAW_RAM_PAGE(raw, line))
+	(raw->ssd_pages_offset + _RAW_RAM_PAGE(raw, line))
 
 #define _RAW_RAM_ADDR_PAGE(raw, line) \
-		(_RAW_RAM_ADDR(raw, \
-		_RAW_RAM_PAGE(raw, line) * raw->entries_in_page))
+	(raw->mem_pool + _RAW_RAM_PAGE(raw, line) * (uint64_t)PAGE_SIZE)
+
+#define _RAW_RAM_ADDR(raw, line) \
+	(_RAW_RAM_ADDR_PAGE(raw, line) + (line % raw->entries_in_page) * \
+			raw->entry_size)
 
 #define _RAW_RAM_GET(raw, line, data) \
-		env_memcpy(data, raw->entry_size, _RAW_RAM_ADDR(raw, (line)), \
-		raw->entry_size)
+	env_memcpy(data, raw->entry_size, _RAW_RAM_ADDR(raw, (line)), \
+	raw->entry_size)
 
 #define _RAW_RAM_SET(raw, line, data) \
-		env_memcpy(_RAW_RAM_ADDR(raw, line), raw->entry_size, \
-		data, raw->entry_size)
-
-
+	env_memcpy(_RAW_RAM_ADDR(raw, line), raw->entry_size, \
+	data, raw->entry_size)
 
 /*
  * RAM Implementation - De-Initialize

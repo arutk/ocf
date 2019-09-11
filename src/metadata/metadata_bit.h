@@ -63,18 +63,20 @@ static bool _ocf_metadata_test_##what##_##type(struct ocf_cache *cache, \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	const struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	const struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
+	elem = ocf_metadata_raw_rd_access(cache, raw, line); \
+\
 	if (all) { \
-		if (mask == (map[line].what & mask)) { \
+		if (mask == (elem->what & mask)) { \
 			return true; \
 		} else { \
 			return false; \
 		} \
 	} else { \
-		if (map[line].what & mask) { \
+		if (elem->what & mask) { \
 			return true; \
 		} else { \
 			return false; \
@@ -93,11 +95,13 @@ static bool _ocf_metadata_test_out_##what##_##type(struct ocf_cache *cache, \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	const struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	const struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
-	if (map[line].what & ~mask) { \
+	elem = ocf_metadata_raw_rd_access(cache, raw, line); \
+\
+	if (elem->what & ~mask) { \
 		return true; \
 	} else { \
 		return false; \
@@ -115,13 +119,15 @@ static bool _ocf_metadata_clear_##what##_##type(struct ocf_cache *cache, \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
-	map[line].what &= ~mask; \
+	elem = ocf_metadata_raw_wr_access(cache, raw, line); \
 \
-	if (map[line].what) { \
+	elem->what &= ~mask; \
+\
+	if (elem->what) { \
 		return true; \
 	} else { \
 		return false; \
@@ -140,13 +146,15 @@ static bool _ocf_metadata_set_##what##_##type(struct ocf_cache *cache, \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
-	result = map[line].what ? true : false; \
+	elem = ocf_metadata_raw_wr_access(cache, raw, line); \
 \
-	map[line].what |= mask; \
+	result = elem->what ? true : false; \
+\
+	elem->what |= mask; \
 \
 	return result; \
 } \
@@ -164,25 +172,27 @@ static bool _ocf_metadata_test_and_set_##what##_##type( \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
+	elem = ocf_metadata_raw_wr_access(cache, raw, line); \
+\
 	if (all) { \
-		if (mask == (map[line].what & mask)) { \
+		if (mask == (elem->what & mask)) { \
 			test = true; \
 		} else { \
 			test = false; \
 		} \
 	} else { \
-		if (map[line].what & mask) { \
+		if (elem->what & mask) { \
 			test = true; \
 		} else { \
 			test = false; \
 		} \
 	} \
 \
-	map[line].what |= mask; \
+	elem->what |= mask; \
 	return test; \
 } \
 \
@@ -199,25 +209,27 @@ static bool _ocf_metadata_test_and_clear_##what##_##type( \
 	struct ocf_metadata_raw *raw = \
 			&ctrl->raw_desc[metadata_segment_collision]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_map_##type *elem; \
 \
 	_raw_bug_on(raw, line); \
 \
+	elem = ocf_metadata_raw_wr_access(cache, raw, line); \
+\
 	if (all) { \
-		if (mask == (map[line].what & mask)) { \
+		if (mask == (elem->what & mask)) { \
 			test = true; \
 		} else { \
 			test = false; \
 		} \
 	} else { \
-		if (map[line].what & mask) { \
+		if (elem->what & mask) { \
 			test = true; \
 		} else { \
 			test = false; \
 		} \
 	} \
 \
-	map[line].what &= ~mask; \
+	elem->what &= ~mask; \
 	return test; \
 } \
 
