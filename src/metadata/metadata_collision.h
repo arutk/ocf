@@ -79,6 +79,12 @@ static inline uint64_t ocf_metadata_get_num_collision_pages(
 	return cache->metadata.iface.get_num_collision_pages(cache);
 }
 
+static inline uint32_t ocf_metadata_get_collision_page(
+		struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	return cache->metadata.iface.get_collision_page(cache, line);
+}
+
 static inline void ocf_metadata_get_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t *next, ocf_cache_line_t *prev)

@@ -2517,6 +2517,17 @@ static uint64_t ocf_metadata_hash_get_num_collision_pages(
 	return raw->ssd_pages;
 }
 
+static uint64_t ocf_metadata_hash_get_collision_page(
+		struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	struct ocf_metadata_hash_ctrl *ctrl =
+		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_raw *raw =
+		&ctrl->raw_desc[metadata_segment_collision];
+
+	return ocf_metadata_raw_page(raw, line);
+}
+
 static void ocf_metadata_hash_get_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t *next, ocf_cache_line_t *prev)
@@ -2694,6 +2705,7 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	.set_collision_next = ocf_metadata_hash_set_collision_next,
 	.set_collision_prev = ocf_metadata_hash_set_collision_prev,
 	.get_num_collision_pages = ocf_metadata_hash_get_num_collision_pages,
+	.get_collision_page = ocf_metadata_hash_get_collision_page,
 
 	/*
 	 * Partition Info

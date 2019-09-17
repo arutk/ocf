@@ -362,6 +362,9 @@ struct ocf_metadata_iface {
 
 	uint64_t (*get_num_collision_pages)(struct ocf_cache *cache);
 
+	uint64_t (*get_collision_page)(
+		struct ocf_cache *cache, ocf_cache_line_t line);
+
 	void (*get_partition_info)(struct ocf_cache *cache,
 			ocf_cache_line_t line, ocf_part_id_t *part_id,
 			ocf_cache_line_t *next_line,
