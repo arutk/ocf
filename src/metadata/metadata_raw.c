@@ -286,7 +286,18 @@ static int _raw_ram_flush_all_fill(ocf_cache_t cache,
 
 	OCF_DEBUG_PARAM(cache, "Line = %u, Page = %u", line, raw_page);
 
+	if (raw->metadata_segment == metadata_segment_collision) {
+		ocf_collision_start_exclusive_access(&cache->metadata.lock,
+				raw_page);
+	}
+
 	ctx_data_wr_check(cache->owner, data, _RAW_RAM_ADDR(raw, line), size);
+
+	if (raw->metadata_segment == metadata_segment_collision) {
+		ocf_collision_end_exclusive_access(&cache->metadata.lock,
+				raw_page);
+	}
+
 	ctx_data_zero_check(cache->owner, data, PAGE_SIZE - size);
 
 	return 0;
@@ -398,7 +409,18 @@ static int _raw_ram_flush_do_asynch_fill(ocf_cache_t cache,
 
 	OCF_DEBUG_PARAM(cache, "Line = %u, Page = %u", line, raw_page);
 
+	if (raw->metadata_segment == metadata_segment_collision) {
+		ocf_collision_start_exclusive_access(&cache->metadata.lock,
+				raw_page);
+	}
+
 	ctx_data_wr_check(cache->owner, data, _RAW_RAM_ADDR(raw, line), size);
+
+	if (raw->metadata_segment == metadata_segment_collision) {
+		ocf_collision_end_exclusive_access(&cache->metadata.lock,
+				raw_page);
+	}
+
 	ctx_data_zero_check(cache->owner, data, PAGE_SIZE - size);
 
 	return 0;

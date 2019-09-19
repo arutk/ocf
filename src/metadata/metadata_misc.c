@@ -107,6 +107,12 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
+	uint32_t page;
+
+	page = ocf_metadata_get_collision_page(cache, cache_line);
+
+	ocf_collision_start_shared_access(&cache->metadata.lock, page);
+
 	set_cache_line_invalid_no_flush(cache, 0, ocf_line_end_sector(cache),
 			cache_line);
 
@@ -114,6 +120,8 @@ static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 	 * This is especially for removing inactive core
 	 */
 	metadata_clear_dirty(cache, cache_line);
+
+	ocf_collision_end_shared_access(&cache->metadata.lock, page);
 }
 
 /* caller must hold metadata lock

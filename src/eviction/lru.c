@@ -397,6 +397,7 @@ uint32_t evp_lru_req_clines(ocf_cache_t cache, ocf_queue_t io_queue,
 	ocf_cache_line_t curr_cline, prev_cline;
 	struct ocf_user_part *part = &cache->user_parts[part_id];
 	union eviction_policy_meta eviction;
+	uint32_t page;
 
 	if (cline_no == 0)
 		return 0;
@@ -432,9 +433,16 @@ uint32_t evp_lru_req_clines(ocf_cache_t cache, ocf_queue_t io_queue,
 			evp_lru_zero_line(cache, io_queue, curr_cline);
 
 		} else {
+			page = ocf_metadata_get_collision_page(cache,
+					curr_cline);
+
+			ocf_collision_start_shared_access(&cache->metadata.lock,
+					page);
 			set_cache_line_invalid_no_flush(cache, 0,
 					ocf_line_end_sector(cache),
 					curr_cline);
+			ocf_collision_end_shared_access(&cache->metadata.
+					lock, page);
 
 			/* Goto next item. */
 			i++;

@@ -317,6 +317,7 @@ static int _ocf_cleaner_update_metadata(struct ocf_request *req)
 	uint32_t i;
 	ocf_cache_line_t cache_line;
 	ocf_core_id_t core_id;
+	uint32_t page;
 
 	OCF_DEBUG_TRACE(req->cache);
 
@@ -332,6 +333,7 @@ static int _ocf_cleaner_update_metadata(struct ocf_request *req)
 		}
 
 		cache_line = iter->coll_idx;
+		page = ocf_metadata_get_collision_page(cache, cache_line);
 
 		if (!metadata_test_dirty(cache, cache_line))
 			continue;
@@ -340,8 +342,10 @@ static int _ocf_cleaner_update_metadata(struct ocf_request *req)
 				&core_id, &req->part_id);
 		req->core = &cache->core[core_id];
 
+		ocf_collision_start_exclusive_access(&cache->metadata.lock, page);
 		set_cache_line_clean(cache, 0, ocf_line_end_sector(cache), req,
 				i);
+		ocf_collision_end_exclusive_access(&cache->metadata.lock, page);
 	}
 
 	ocf_metadata_flush_do_asynch(cache, req, _ocf_cleaner_metadata_io_end);
