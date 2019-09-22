@@ -43,12 +43,6 @@
 #define OCF_DEBUG_PARAM(cache, format, ...)
 #endif
 
-struct flush_merge_struct {
-	ocf_cache_line_t cache_line;
-	ocf_core_id_t core_id;
-	uint64_t core_sector;
-};
-
 struct alru_flush_ctx {
 	struct ocf_cleaner_attribs attribs;
 	bool flush_perfomed;
@@ -58,6 +52,12 @@ struct alru_flush_ctx {
 	struct flush_data *flush_data;
 	size_t flush_data_limit;
 };
+
+struct alru_context {
+	struct alru_flush_ctx flush_ctx;
+	env_mutex list_mutex;
+};
+
 
 /* -- Start of ALRU functions -- */
 
@@ -319,20 +319,29 @@ void cleaning_policy_alru_init_cache_block(struct ocf_cache *cache,
 void cleaning_policy_alru_purge_cache_block(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
+	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
 			cache_line);
 
+	env_mutex_lock(&alru->list_mutex);
 	remove_alru_list(cache, part_id, cache_line);
+	env_mutex_unlock(&alru->list_mutex);
 }
 
 static void __cleaning_policy_alru_purge_cache_block_any(
 		struct ocf_cache *cache, uint32_t cache_line)
 {
+	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
+
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
 			cache_line);
 
+	env_mutex_lock(&alru->list_mutex);
+
 	if (is_on_alru_list(cache, part_id, cache_line))
 		remove_alru_list(cache, part_id, cache_line);
+
+	env_mutex_unlock(&alru->list_mutex);
 }
 
 int cleaning_policy_alru_purge_range(struct ocf_cache *cache, int core_id,
@@ -357,6 +366,7 @@ int cleaning_policy_alru_purge_range(struct ocf_cache *cache, int core_id,
 void cleaning_policy_alru_set_hot_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
+	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
 			cache_line);
 	struct ocf_user_part *part = &cache->user_parts[part_id];
@@ -367,6 +377,8 @@ void cleaning_policy_alru_set_hot_cache_line(struct ocf_cache *cache,
 
 	ENV_WARN_ON(!metadata_test_dirty(cache, cache_line));
 	ENV_WARN_ON(!metadata_test_valid_any(cache, cache_line));
+
+	env_mutex_lock(&alru->list_mutex);
 
 	ocf_metadata_get_cleaning_policy(cache, cache_line, &policy);
 	next_lru_node = policy.meta.alru.lru_next;
@@ -381,6 +393,8 @@ void cleaning_policy_alru_set_hot_cache_line(struct ocf_cache *cache,
 		remove_alru_list(cache, part_id, cache_line);
 
 	add_alru_head(cache, part_id, cache_line);
+
+	env_mutex_unlock(&alru->list_mutex);
 }
 
 static void _alru_rebuild(struct ocf_cache *cache)
@@ -452,15 +466,22 @@ int cleaning_policy_alru_initialize(ocf_cache_t cache, int init_metadata)
 {
 	struct ocf_user_part *part;
 	ocf_part_id_t part_id;
-	struct alru_flush_ctx *fctx;
+	struct alru_context *alru;
+	int err;
 
-	fctx = env_vzalloc(sizeof(*fctx));
-	if (!fctx) {
-		ocf_cache_log(cache, log_err, "alru ctx allocation error\n");
+	alru = env_vzalloc(sizeof(*alru));
+	if (!alru) {
+		ocf_cache_log(cache, log_err, "alru context allocation error\n");
 		return -OCF_ERR_NO_MEM;
 	}
 
-	cache->cleaner.cleaning_policy_context = fctx;
+	err = env_mutex_init(&alru->list_mutex);
+	if (err) {
+		env_vfree(alru);
+		return err;
+	}
+
+	cache->cleaner.cleaning_policy_context = alru;
 
 	for_each_part(cache, part, part_id) {
 		cleaning_policy_alru_initialize_part(cache,
@@ -477,6 +498,9 @@ int cleaning_policy_alru_initialize(ocf_cache_t cache, int init_metadata)
 
 void cleaning_policy_alru_deinitialize(struct ocf_cache *cache)
 {
+	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
+
+	env_mutex_destroy(&alru->list_mutex);
 	env_vfree(cache->cleaner.cleaning_policy_context);
 	cache->cleaner.cleaning_policy_context = NULL;
 }
@@ -706,8 +730,9 @@ static bool block_is_busy(struct ocf_cache *cache,
 	return false;
 }
 
-static int get_data_to_flush(struct alru_flush_ctx *fctx)
+static int get_data_to_flush(struct alru_context *alru)
 {
+	struct alru_flush_ctx *fctx = &alru->flush_ctx;
 	ocf_cache_t cache = fctx->cache;
 	struct alru_cleaning_policy_config *config;
 	struct cleaning_policy_meta policy;
@@ -720,6 +745,8 @@ static int get_data_to_flush(struct alru_flush_ctx *fctx)
 	config = (void *)&cache->conf_meta->cleaning[ocf_cleaning_alru].data;
 
 	get_parts_sorted(parts, cache);
+
+	env_mutex_lock(&alru->list_mutex);
 
 	while (part_id >= OCF_IO_CLASS_ID_MIN) {
 		cache_line =
@@ -747,6 +774,8 @@ static int get_data_to_flush(struct alru_flush_ctx *fctx)
 		part_id--;
 	}
 
+	env_mutex_lock(&alru->list_mutex);
+
 end:
 	OCF_DEBUG_PARAM(cache, "Collected items_to_clean=%u", to_flush);
 
@@ -769,8 +798,9 @@ static void alru_clean_complete(void *priv, int err)
 	fctx->cmpl(&fctx->cache->cleaner, interval);
 }
 
-static void alru_clean(struct alru_flush_ctx *fctx)
+static void alru_clean(struct alru_context *alru)
 {
+	struct alru_flush_ctx *fctx = &alru->flush_ctx;
 	ocf_cache_t cache = fctx->cache;
 	int to_clean;
 
@@ -792,7 +822,7 @@ static void alru_clean(struct alru_flush_ctx *fctx)
 		goto end;
 	}
 
-	to_clean = get_data_to_flush(fctx);
+	to_clean = get_data_to_flush(alru);
 	if (to_clean > 0) {
 		fctx->flush_perfomed = true;
 		ocf_cleaner_do_flush_data_async(cache, fctx->flush_data, to_clean,
@@ -812,7 +842,8 @@ end:
 
 void cleaning_alru_perform_cleaning(ocf_cache_t cache, ocf_cleaner_end_t cmpl)
 {
-	struct alru_flush_ctx *fctx = cache->cleaner.cleaning_policy_context;
+	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
+	struct alru_flush_ctx *fctx = &alru->flush_ctx;
 	struct alru_cleaning_policy_config *config;
 
 	config = (void *)&cache->conf_meta->cleaning[ocf_cleaning_alru].data;
@@ -830,5 +861,5 @@ void cleaning_alru_perform_cleaning(ocf_cache_t cache, ocf_cleaner_end_t cmpl)
 	fctx->cmpl = cmpl;
 	fctx->flush_perfomed = false;
 
-	alru_clean(fctx);
+	alru_clean(alru);
 }
