@@ -127,10 +127,22 @@ static void remove_lru_list(ocf_cache_t cache, int partition_id,
 	int is_clean_head = 0, is_clean_tail = 0, is_dirty_head = 0, is_dirty_tail = 0;
 	uint32_t prev_lru_node, next_lru_node;
 	uint32_t collision_table_entries = cache->device->collision_table_entries;
-	struct ocf_user_part *part = &cache->user_parts[partition_id];
+	struct ocf_user_part *part;
 	union eviction_policy_meta eviction;
 
 	ENV_BUG_ON(!(collision_index < collision_table_entries));
+
+	if (partition_id < 0 || partition_id >= OCF_IO_CLASS_MAX) {
+		printk(KERN_ERR "%s invalid partition id: %d\n", __func__, partition_id);
+		ENV_BUG_ON(true);
+	}
+
+	part = &cache->user_parts[partition_id];
+
+	if (!part->runtime || (uint64_t)(part->runtime) < 0x100000) {
+		printk(KERN_ERR "%s invalid partition->runtime pointer: %p\n", __func__, part->runtime);
+		ENV_BUG_ON(true);
+	}
 
 	ocf_metadata_get_evicition_policy(cache, collision_index, &eviction);
 
