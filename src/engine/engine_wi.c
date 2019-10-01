@@ -99,12 +99,29 @@ static void _ocf_write_wi_core_complete(struct ocf_request *req, int error)
 
 static int _ocf_write_wi_do(struct ocf_request *req)
 {
+	unsigned i;
+	ocf_cache_t cache = req->cache;
+
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
 
 	env_atomic_set(&req->req_remaining, 1); /* One core IO */
 
 	OCF_DEBUG_RQ(req, "Submit");
+
+	for (i = 0; i < req->core_line_count; i++) {
+		struct ocf_map_info *entry = &(req->map[i]);
+		ocf_part_id_t part_id;
+
+		if (entry->status == LOOKUP_HIT) {
+			if (!metadata_test_valid_any(cache, entry->coll_idx))
+				printk(KERN_ERR "%s invalid hit!\n", __func__);
+			if ((part_id = ocf_metadata_get_partition_id(cache, entry->coll_idx)) >= OCF_IO_CLASS_MAX) {
+				printk(KERN_ERR "%s io class id: %u\n", __func__, part_id);
+				ENV_BUG_ON(1);
+			}
+               }
+	}
 
 	/* Submit write IO to the core */
 	ocf_submit_volume_req(&req->core->volume, req,
