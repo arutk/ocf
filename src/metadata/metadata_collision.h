@@ -99,4 +99,5 @@ void ocf_metadata_remove_from_collision(struct ocf_cache *cache,
  void ocf_metadata_hash_end_collision_shared_access(
 		struct ocf_cache *cache, ocf_cache_line_t line);
 
+
 #endif /* METADATA_COLLISION_H_ */

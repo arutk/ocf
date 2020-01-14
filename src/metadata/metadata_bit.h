@@ -128,7 +128,7 @@ static bool _ocf_metadata_clear_##what##_##type(struct ocf_cache *cache, \
 	} \
 } \
 \
-static bool _ocf_metadata_hash_set_##what##_##type(struct ocf_cache *cache, \
+static bool _ocf_metadata_set_##what##_##type(struct ocf_cache *cache, \
 		ocf_cache_line_t line, uint8_t start, uint8_t stop) \
 { \
 	bool result; \
