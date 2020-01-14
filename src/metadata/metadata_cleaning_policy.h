@@ -6,18 +6,8 @@
 #ifndef __METADATA_CLEANING_POLICY_H__
 #define __METADATA_CLEANING_POLICY_H__
 
-/*
- * GET
- */
-void
-ocf_metadata_hash_get_cleaning_policy(struct ocf_cache *cache,
-		ocf_cache_line_t line, struct cleaning_policy_meta *policy);
+struct cleaning_policy_meta *
+ocf_metadata_hash_get_cleaning_policy_meta(struct ocf_cache *cache, ocf_cache_line_t line);
 
-/*
- * SET
- */
-void
-ocf_metadata_hash_set_cleaning_policy(struct ocf_cache *cache,
-		ocf_cache_line_t line, struct cleaning_policy_meta *policy);
 
 #endif /* METADATA_CLEANING_POLICY_H_ */

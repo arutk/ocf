@@ -2319,18 +2319,11 @@ void ocf_metadata_hash_get_core_and_part_id(
 ocf_cache_line_t ocf_metadata_hash_get_hash(
 		struct ocf_cache *cache, ocf_cache_line_t index)
 {
-	ocf_cache_line_t line = cache->device->collision_table_entries;
-	int result = 0;
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	result = ocf_metadata_raw_get(cache,
-			&(ctrl->raw_desc[metadata_segment_hash]), index, &line);
-
-	if (result)
-		ocf_metadata_error(cache);
-
-	return line;
+	return *(ocf_cache_line_t*)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_hash]), index);
 }
 
 /*
@@ -2339,15 +2332,11 @@ ocf_cache_line_t ocf_metadata_hash_get_hash(
 void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 		ocf_cache_line_t index, ocf_cache_line_t line)
 {
-	int result = 0;
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	result = ocf_metadata_raw_set(cache,
-			&(ctrl->raw_desc[metadata_segment_hash]), index, &line);
-
-	if (result)
-		ocf_metadata_error(cache);
+	*(ocf_cache_line_t*)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_hash]), index) = line;
 }
 
 /*******************************************************************************
@@ -2357,39 +2346,14 @@ void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 /*
  * Cleaning policy - Get
  */
-void ocf_metadata_hash_get_cleaning_policy(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		struct cleaning_policy_meta *cleaning_policy)
+struct cleaning_policy_meta *
+ocf_metadata_hash_get_cleaning_policy_meta(struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	int result = 0;
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	result = ocf_metadata_raw_get(cache,
-			&(ctrl->raw_desc[metadata_segment_cleaning]), line,
-			cleaning_policy);
-
-	if (result)
-		ocf_metadata_error(cache);
-}
-
-/*
- * Cleaning policy - Set
- */
-void ocf_metadata_hash_set_cleaning_policy(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		struct cleaning_policy_meta *cleaning_policy)
-{
-	int result = 0;
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	result = ocf_metadata_raw_set(cache,
-			&(ctrl->raw_desc[metadata_segment_cleaning]), line,
-			cleaning_policy);
-
-	if (result)
-		ocf_metadata_error(cache);
+	return ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cleaning]), line);
 }
 
 /*******************************************************************************
@@ -2399,39 +2363,15 @@ void ocf_metadata_hash_set_cleaning_policy(
 /*
  * Eviction policy - Get
  */
-void ocf_metadata_hash_get_eviction_policy(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		union eviction_policy_meta *eviction_policy)
+union eviction_policy_meta *
+ocf_metadata_hash_get_eviction_policy(
+		struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	int result = 0;
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	result = ocf_metadata_raw_get(cache,
-			&(ctrl->raw_desc[metadata_segment_eviction]), line,
-			eviction_policy);
-
-	if (result)
-		ocf_metadata_error(cache);
-}
-
-/*
- * Cleaning policy - Set
- */
-void ocf_metadata_hash_set_eviction_policy(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		union eviction_policy_meta *eviction_policy)
-{
-	int result = 0;
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	result = ocf_metadata_raw_set(cache,
-			&(ctrl->raw_desc[metadata_segment_eviction]), line,
-			eviction_policy);
-
-	if (result)
-		ocf_metadata_error(cache);
+	return ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_eviction]), line);
 }
 
 /*******************************************************************************
@@ -2787,7 +2727,6 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	/*
 	 * Eviction Policy
 	 */
-	.set_eviction_policy = ocf_metadata_hash_set_eviction_policy,
 };
 
 /*******************************************************************************
