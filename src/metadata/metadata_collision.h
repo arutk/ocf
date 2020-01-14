@@ -21,22 +21,26 @@ struct ocf_metadata_list_info {
 		/*!<  Next cache line in the same partition*/
 	ocf_part_id_t partition_id : 8;
 		/*!<  ID of partition where is assigned this cache line*/
-} __attribute__((packed));
+};
 
 /**
  * @brief Metadata map structure
  */
 
-struct ocf_metadata_map {
-	uint64_t core_line;
+struct ocf_metadata_cacheline {
+	uint64_t core_line; // 8
 		/*!<  Core line addres on cache mapped by this strcture */
 
-	uint16_t core_id;
+	uint16_t core_id; // 2
 		/*!<  ID of core where is assigned this cache line*/
 
-	uint8_t status[];
-		/*!<  Entry status structure e.g. valid, dirty...*/
-} __attribute__((packed));
+	ocf_cache_line_t hash; // 4
+
+	struct ocf_metadata_list_info list; // 20
+	struct cleaning_policy_meta cleaning; // 12
+	union eviction_policy_meta eviction;  // 8
+};
+
 
 static inline ocf_cache_line_t ocf_metadata_map_lg2phy(
 		struct ocf_cache *cache, ocf_cache_line_t coll_idx)

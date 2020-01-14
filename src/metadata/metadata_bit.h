@@ -45,11 +45,11 @@ static inline u128 _get_mask_u128(uint8_t start, uint8_t stop)
 }
 
 #define ocf_metadata_bit_struct(type) \
-struct ocf_metadata_map_##type { \
-	struct ocf_metadata_map map; \
+struct ocf_metadata_cacheline_##type { \
+	struct ocf_metadata_cacheline cl; \
 	type valid; \
 	type dirty; \
-} __attribute__((packed))
+} __attribute__((aligned(64)));
 
 #define ocf_metadata_bit_func(what, type) \
 static bool _ocf_metadata_test_##what##_##type(struct ocf_cache *cache, \
@@ -61,9 +61,9 @@ static bool _ocf_metadata_test_##what##_##type(struct ocf_cache *cache, \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	const struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	const struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \
@@ -91,9 +91,9 @@ static bool _ocf_metadata_test_out_##what##_##type(struct ocf_cache *cache, \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	const struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	const struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \
@@ -113,9 +113,9 @@ static bool _ocf_metadata_clear_##what##_##type(struct ocf_cache *cache, \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \
@@ -138,9 +138,9 @@ static bool _ocf_metadata_set_##what##_##type(struct ocf_cache *cache, \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \
@@ -162,9 +162,9 @@ static bool _ocf_metadata_test_and_set_##what##_##type( \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \
@@ -197,9 +197,9 @@ static bool _ocf_metadata_test_and_clear_##what##_##type( \
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv; \
 \
 	struct ocf_metadata_raw *raw = \
-			&ctrl->raw_desc[metadata_segment_collision]; \
+			&ctrl->raw_desc[metadata_segment_cacheline]; \
 \
-	struct ocf_metadata_map_##type *map = raw->mem_pool; \
+	struct ocf_metadata_cacheline_##type *map = raw->mem_pool; \
 \
 	_raw_bug_on(raw, line); \
 \

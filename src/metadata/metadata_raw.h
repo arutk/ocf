@@ -42,8 +42,8 @@ enum ocf_metadata_raw_type {
 	metadata_raw_type_min = metadata_raw_type_ram /*!<  MAX */
 };
 
-struct ocf_metadata_raw;
 
+struct ocf_metadata_raw;
 /**
  * @brief Container page lock/unlock callback
  */

@@ -30,11 +30,9 @@ enum ocf_metadata_segment {
 	metadata_segment_variable_size_start = metadata_segment_fixed_size_max,
 
 	/* sections with size dependent on cache device size go here: */
-	metadata_segment_cleaning =	/*!< Cleaning policy */
+	metadata_segment_cacheline =	/*!< Cleaning policy */
 			metadata_segment_variable_size_start,
-	metadata_segment_eviction,	/*!< Eviction policy */
-	metadata_segment_collision,	/*!< Collision */
-	metadata_segment_list_info,	/*!< Collision */
+
 	metadata_segment_hash,		/*!< Hash */
 	/* .... new variable size sections go here */
 

@@ -63,7 +63,6 @@ struct ocf_metadata_hash_ctrl {
 	ocf_cache_line_t start_page;
 	ocf_cache_line_t count_pages;
 	uint32_t device_lines;
-	size_t mapping_size;
 	struct ocf_metadata_raw raw_desc[metadata_segment_max];
 };
 
@@ -77,10 +76,7 @@ static ocf_cache_line_t ocf_metadata_hash_get_entries(
 	ENV_BUG_ON(type >= metadata_segment_variable_size_start && cache_lines == 0);
 
 	switch (type) {
-	case metadata_segment_collision:
-	case metadata_segment_cleaning:
-	case metadata_segment_eviction:
-	case metadata_segment_list_info:
+	case metadata_segment_cacheline:
 		return cache_lines;
 
 	case metadata_segment_hash:
@@ -120,80 +116,9 @@ static ocf_cache_line_t ocf_metadata_hash_get_entries(
 	return 0;
 }
 
-/*
- * Get size of particular hash metadata type element
- */
 static int64_t ocf_metadata_hash_get_element_size(
 		enum ocf_metadata_segment type,
-		const struct ocf_cache_line_settings *settings)
-{
-	int64_t size = 0;
-
-	ENV_BUG_ON(type >= metadata_segment_variable_size_start && !settings);
-
-	switch (type) {
-	case metadata_segment_eviction:
-		size = sizeof(union eviction_policy_meta);
-		break;
-
-	case metadata_segment_cleaning:
-		size = sizeof(struct cleaning_policy_meta);
-		break;
-
-	case metadata_segment_collision:
-		size = sizeof(struct ocf_metadata_map)
-			+ ocf_metadata_status_sizeof(settings);
-		break;
-
-	case metadata_segment_list_info:
-		size = sizeof(struct ocf_metadata_list_info);
-		break;
-
-	case metadata_segment_sb_config:
-		size = PAGE_SIZE;
-		break;
-
-	case metadata_segment_sb_runtime:
-		size = PAGE_SIZE;
-		break;
-
-	case metadata_segment_reserved:
-		size = PAGE_SIZE;
-		break;
-
-	case metadata_segment_part_config:
-		size = sizeof(struct ocf_user_part_config);
-		break;
-
-	case metadata_segment_part_runtime:
-		size = sizeof(struct ocf_user_part_runtime);
-		break;
-
-	case metadata_segment_hash:
-		size = sizeof(ocf_cache_line_t);
-		break;
-
-	case metadata_segment_core_config:
-		size = sizeof(struct ocf_core_meta_config);
-		break;
-
-	case metadata_segment_core_runtime:
-		size = sizeof(struct ocf_core_meta_runtime);
-		break;
-
-	case metadata_segment_core_uuid:
-		size = sizeof(struct ocf_metadata_uuid);
-		break;
-
-	default:
-		break;
-
-	}
-
-	ENV_BUG_ON(size > PAGE_SIZE);
-
-	return size;
-}
+		const struct ocf_cache_line_settings *settings);
 
 /*
  * Metadata calculation exception handling.
@@ -335,10 +260,7 @@ static const char * const ocf_metadata_hash_raw_names[] = {
 		[metadata_segment_reserved]		= "Reserved",
 		[metadata_segment_part_config]		= "Part config",
 		[metadata_segment_part_runtime]		= "Part runtime",
-		[metadata_segment_cleaning]		= "Cleaning",
-		[metadata_segment_eviction]		= "Eviction",
-		[metadata_segment_collision]		= "Collision",
-		[metadata_segment_list_info]		= "List info",
+		[metadata_segment_cacheline]		= "Collision",
 		[metadata_segment_hash]			= "Hash",
 		[metadata_segment_core_config]		= "Core config",
 		[metadata_segment_core_runtime]		= "Core runtime",
@@ -935,9 +857,6 @@ static int ocf_metadata_hash_init_variable_size(struct ocf_cache *cache,
 		/* Re-initialize settings with different cache line size */
 		ocf_metadata_config_init(cache, settings, cache_line_size);
 
-	ctrl->mapping_size = ocf_metadata_status_sizeof(settings)
-		+ sizeof(struct ocf_metadata_map);
-
 	ocf_metadata_hash_init_iface(cache, layout);
 
 	/* Initial setup of dynamic size RAW containers */
@@ -952,7 +871,7 @@ static int ocf_metadata_hash_init_variable_size(struct ocf_cache *cache,
 
 		if (cache->device->init_mode == ocf_init_mode_metadata_volatile) {
 			raw->raw_type = metadata_raw_type_volatile;
-		} else if (i == metadata_segment_collision &&
+		} else if (i == metadata_segment_cacheline &&
 				ocf_volume_is_atomic(&cache->device->volume)) {
 			raw->raw_type = metadata_raw_type_atomic;
 		}
@@ -978,7 +897,7 @@ static int ocf_metadata_hash_init_variable_size(struct ocf_cache *cache,
 	 */
 	for (i = metadata_segment_variable_size_start;
 			i < metadata_segment_max; i++) {
-		if (i == metadata_segment_collision) {
+		if (i == metadata_segment_cacheline) {
 			lock_page =
 				ocf_metadata_hash_flush_lock_collision_page;
 			unlock_page =
@@ -1073,7 +992,7 @@ finalize:
 
 	result = ocf_metadata_concurrency_attached_init(&cache->metadata.lock,
 			cache, ctrl->raw_desc[metadata_segment_hash].entries,
-			(uint32_t)ctrl->raw_desc[metadata_segment_collision].
+			(uint32_t)ctrl->raw_desc[metadata_segment_cacheline].
 			ssd_pages);
 	if (result) {
 		ocf_cache_log(cache, log_err, "Failed to initialize attached "
@@ -1707,10 +1626,7 @@ struct ocf_pipeline_arg ocf_metadata_hash_flush_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_sb_runtime),
 	OCF_PL_ARG_INT(metadata_segment_part_runtime),
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
-	OCF_PL_ARG_INT(metadata_segment_cleaning),
-	OCF_PL_ARG_INT(metadata_segment_eviction),
-	OCF_PL_ARG_INT(metadata_segment_collision),
-	OCF_PL_ARG_INT(metadata_segment_list_info),
+	OCF_PL_ARG_INT(metadata_segment_cacheline),
 	OCF_PL_ARG_INT(metadata_segment_hash),
 	OCF_PL_ARG_TERMINATOR(),
 };
@@ -1778,7 +1694,7 @@ static void ocf_metadata_hash_flush_mark(struct ocf_cache *cache,
 
 	/* Collision table to get mapping cache line to HDD sector*/
 	ocf_metadata_raw_flush_mark(cache,
-			&(ctrl->raw_desc[metadata_segment_collision]),
+			&(ctrl->raw_desc[metadata_segment_cacheline]),
 			req, map_idx, to_state, start, stop);
 }
 
@@ -1803,7 +1719,7 @@ static void ocf_metadata_hash_flush_do_asynch(struct ocf_cache *cache,
 	env_atomic_inc(&req->req_remaining); /* Core device IO */
 
 	result |= ocf_metadata_raw_flush_do_asynch(cache, req,
-			&(ctrl->raw_desc[metadata_segment_collision]),
+			&(ctrl->raw_desc[metadata_segment_cacheline]),
 			complete);
 
 	if (result) {
@@ -1833,10 +1749,7 @@ out:
 
 struct ocf_pipeline_arg ocf_metadata_hash_load_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
-	OCF_PL_ARG_INT(metadata_segment_cleaning),
-	OCF_PL_ARG_INT(metadata_segment_eviction),
-	OCF_PL_ARG_INT(metadata_segment_collision),
-	OCF_PL_ARG_INT(metadata_segment_list_info),
+	OCF_PL_ARG_INT(metadata_segment_cacheline),
 	OCF_PL_ARG_INT(metadata_segment_hash),
 	OCF_PL_ARG_TERMINATOR(),
 };
@@ -2009,7 +1922,7 @@ ocf_metadata_hash_load_recovery_legacy_pl_props = {
 	.finish = ocf_metadata_hash_load_recovery_legacy_finish,
 	.steps = {
 		OCF_PL_STEP_ARG_INT(ocf_medatata_hash_load_segment,
-				metadata_segment_collision),
+				metadata_segment_cacheline),
 		OCF_PL_STEP_ARG_INT(_recovery_rebuild_metadata, true),
 		OCF_PL_STEP_TERMINATOR(),
 	},
@@ -2204,17 +2117,17 @@ void ocf_metadata_hash_get_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t *core_id,
 		uint64_t *core_sector)
 {
-	const struct ocf_metadata_map *collision;
+	const struct ocf_metadata_cacheline *meta;
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	collision = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_collision]), line);
-	if (collision) {
+	meta = ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
+	if (meta) {
 		if (core_id)
-			*core_id = collision->core_id;
+			*core_id = meta->core_id;
 		if (core_sector)
-			*core_sector = collision->core_line;
+			*core_sector = meta->core_line;
 	} else {
 		ocf_metadata_error(cache);
 
@@ -2229,16 +2142,16 @@ void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t core_id,
 		uint64_t core_sector)
 {
-	struct ocf_metadata_map *collision;
+	struct ocf_metadata_cacheline *meta;
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	collision = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_collision]), line);
+	meta = ocf_metadata_raw_wr_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
 
-	if (collision) {
-		collision->core_id = core_id;
-		collision->core_line = core_sector;
+	if (meta) {
+		meta->core_id = core_id;
+		meta->core_line = core_sector;
 	} else {
 		ocf_metadata_error(cache);
 	}
@@ -2247,15 +2160,15 @@ void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
 ocf_core_id_t ocf_metadata_hash_get_core_id(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	const struct ocf_metadata_map *collision;
+	const struct ocf_metadata_cacheline *meta;
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	collision = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_collision]), line);
+	meta = ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
 
-	if (collision)
-		return collision->core_id;
+	if (meta)
+		return meta->core_id;
 
 	ocf_metadata_error(cache);
 	return OCF_CORE_MAX;
@@ -2285,30 +2198,19 @@ void ocf_metadata_hash_get_core_and_part_id(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_core_id_t *core_id, ocf_part_id_t *part_id)
 {
-	const struct ocf_metadata_map *collision;
-	const struct ocf_metadata_list_info *info;
+	struct ocf_metadata_cacheline *meta;
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	collision = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_collision]), line);
+	meta = ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
 
-	info =  ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (collision && info) {
-		if (core_id)
-			*core_id = collision->core_id;
-		if (part_id)
-			*part_id = info->partition_id;
-	} else {
-		ocf_metadata_error(cache);
-		if (core_id)
-			*core_id = OCF_CORE_MAX;
-		if (part_id)
-			*part_id = PARTITION_DEFAULT;
-	}
+	if (core_id)
+		*core_id = meta->core_id;
+	if (part_id)
+		*part_id = meta->list.partition_id;
 }
+
 /*******************************************************************************
  * Hash Table
  ******************************************************************************/
@@ -2322,8 +2224,8 @@ ocf_cache_line_t ocf_metadata_hash_get_hash(
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	return *(ocf_cache_line_t*)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_hash]), index);
+	return 	((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), index))->hash;
 }
 
 /*
@@ -2335,8 +2237,8 @@ void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	*(ocf_cache_line_t*)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_hash]), index) = line;
+	((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), index))->hash = line;
 }
 
 /*******************************************************************************
@@ -2352,8 +2254,8 @@ ocf_metadata_hash_get_cleaning_policy_meta(struct ocf_cache *cache, ocf_cache_li
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	return ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cleaning]), line);
+	return &((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line))->cleaning;
 }
 
 /*******************************************************************************
@@ -2370,8 +2272,8 @@ ocf_metadata_hash_get_eviction_policy(
 	struct ocf_metadata_hash_ctrl *ctrl
 		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	return ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_eviction]), line);
+	return &((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line))->eviction;
 }
 
 /*******************************************************************************
@@ -2396,9 +2298,9 @@ static ocf_cache_line_t ocf_metadata_hash_map_lg2phy_striping(
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 	unsigned int entries_in_page =
-		ctrl->raw_desc[metadata_segment_collision].entries_in_page;
+		ctrl->raw_desc[metadata_segment_cacheline].entries_in_page;
 	unsigned int pages =
-		ctrl->raw_desc[metadata_segment_collision].ssd_pages;
+		ctrl->raw_desc[metadata_segment_cacheline].ssd_pages;
 	ocf_cache_line_t collision_table_entries =
 			cache->device->collision_table_entries;
 	ocf_cache_line_t delta =
@@ -2423,7 +2325,7 @@ static ocf_cache_line_t ocf_metadata_hash_map_phy2lg_striping(
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
 	struct ocf_metadata_raw *raw =
-		&ctrl->raw_desc[metadata_segment_collision];
+		&ctrl->raw_desc[metadata_segment_cacheline];
 
 	unsigned int pages = raw->ssd_pages;
 	unsigned int entries_in_page = raw->entries_in_page;
@@ -2448,84 +2350,55 @@ static ocf_cache_line_t ocf_metadata_hash_map_phy2lg_striping(
 	return coll_idx;
 }
 
+static inline struct ocf_metadata_list_info *get_list_info(struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	struct ocf_metadata_hash_ctrl *ctrl =
+		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+
+	return &((struct ocf_metadata_cacheline*)ocf_metadata_raw_wr_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]), line))->list;
+}
+
 void ocf_metadata_hash_set_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next, ocf_cache_line_t prev)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info) {
-		info->next_col = next;
-		info->prev_col = prev;
-	} else {
-		ocf_metadata_error(cache);
-	}
+	info->next_col = next;
+	info->prev_col = prev;
 }
 
 void ocf_metadata_hash_set_collision_next(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info)
-		info->next_col = next;
-	else
-		ocf_metadata_error(cache);
+	info->next_col = next;
 }
 
 void ocf_metadata_hash_set_collision_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t prev)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info)
-		info->prev_col = prev;
-	else
-		ocf_metadata_error(cache);
+	info->prev_col = prev;
 }
 
 void ocf_metadata_hash_get_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t *next, ocf_cache_line_t *prev)
 {
-	const struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	const struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
 	ENV_BUG_ON(NULL == next && NULL == prev);
 
-	info = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-	if (info) {
-		if (next)
-			*next = info->next_col;
-		if (prev)
-			*prev = info->prev_col;
-	} else {
-		ocf_metadata_error(cache);
-
-		if (next)
-			*next = cache->device->collision_table_entries;
-		if (prev)
-			*prev = cache->device->collision_table_entries;
-	}
+	if (next)
+		*next = info->next_col;
+	if (prev)
+		*prev = info->prev_col;
 }
 
 void ocf_metadata_hash_start_collision_shared_access(struct ocf_cache *cache,
@@ -2534,7 +2407,7 @@ void ocf_metadata_hash_start_collision_shared_access(struct ocf_cache *cache,
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 	struct ocf_metadata_raw *raw =
-			&ctrl->raw_desc[metadata_segment_collision];
+			&ctrl->raw_desc[metadata_segment_cacheline];
 	uint32_t page = ocf_metadata_raw_page(raw, line);
 
 	ocf_collision_start_shared_access(&cache->metadata.lock, page);
@@ -2546,7 +2419,7 @@ void ocf_metadata_hash_end_collision_shared_access(struct ocf_cache *cache,
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 	struct ocf_metadata_raw *raw =
-			&ctrl->raw_desc[metadata_segment_collision];
+			&ctrl->raw_desc[metadata_segment_cacheline];
 	uint32_t page = ocf_metadata_raw_page(raw, line);
 
 	ocf_collision_end_shared_access(&cache->metadata.lock, page);
@@ -2555,69 +2428,37 @@ void ocf_metadata_hash_end_collision_shared_access(struct ocf_cache *cache,
 /*******************************************************************************
  *  Partition
  ******************************************************************************/
-
 void ocf_metadata_hash_get_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_part_id_t *part_id, ocf_cache_line_t *next_line,
 		ocf_cache_line_t *prev_line)
 {
-	const struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	const struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info) {
-		if (part_id)
-			*part_id = info->partition_id;
-		if (next_line)
-			*next_line = info->partition_next;
-		if (prev_line)
-			*prev_line = info->partition_prev;
-	} else {
-		ocf_metadata_error(cache);
-		if (part_id)
-			*part_id = PARTITION_DEFAULT;
-		if (next_line)
-			*next_line = cache->device->collision_table_entries;
-		if (prev_line)
-			*prev_line = cache->device->collision_table_entries;
-	}
+	if (part_id)
+		*part_id = info->partition_id;
+	if (next_line)
+		*next_line = info->partition_next;
+	if (prev_line)
+		*prev_line = info->partition_prev;
 }
 
 void ocf_metadata_hash_set_partition_next(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next_line)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info)
-		info->partition_next = next_line;
-	else
-		ocf_metadata_error(cache);
+	info->partition_next = next_line;
 }
 
 void ocf_metadata_hash_set_partition_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t prev_line)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info)
-		info->partition_prev = prev_line;
-	else
-		ocf_metadata_error(cache);
+	info->partition_prev = prev_line;
 }
 
 void ocf_metadata_hash_set_partition_info(
@@ -2625,20 +2466,11 @@ void ocf_metadata_hash_set_partition_info(
 		ocf_part_id_t part_id, ocf_cache_line_t next_line,
 		ocf_cache_line_t prev_line)
 {
-	struct ocf_metadata_list_info *info;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
 
-	info = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_list_info]), line);
-
-	if (info) {
-		info->partition_id = part_id;
-		info->partition_next = next_line;
-		info->partition_prev = prev_line;
-	} else {
-		ocf_metadata_error(cache);
-	}
+	info->partition_id = part_id;
+	info->partition_next = next_line;
+	info->partition_prev = prev_line;
 }
 
 /*******************************************************************************
@@ -2828,3 +2660,89 @@ const struct ocf_metadata_iface *metadata_hash_get_iface(void)
 {
 	return &metadata_hash_iface;
 }
+
+/*
+ * Get size of particular hash metadata type element
+ */
+static int64_t ocf_metadata_hash_get_element_size(
+		enum ocf_metadata_segment type,
+		const struct ocf_cache_line_settings *settings)
+{
+	int64_t size = 0;
+
+	ENV_BUG_ON(type >= metadata_segment_variable_size_start && !settings);
+
+	switch (type) {
+
+	case metadata_segment_cacheline:
+		switch (settings->size) {
+			case ocf_cache_line_size_4:
+				size = sizeof(struct ocf_metadata_cacheline_u8);
+				break;
+			case ocf_cache_line_size_8:
+				size = sizeof(struct ocf_metadata_cacheline_u16);
+				break;
+			case ocf_cache_line_size_16:
+				size = sizeof(struct ocf_metadata_cacheline_u32);
+				break;
+			case ocf_cache_line_size_32:
+				size = sizeof(struct ocf_metadata_cacheline_u64);
+				break;
+			case ocf_cache_line_size_64:
+				size = sizeof(struct ocf_metadata_cacheline_u128);
+				break;
+			case ocf_cache_line_size_none:
+			default:
+				ENV_BUG_ON(1);
+				size = 0;
+				break;
+		}
+		break;
+
+	case metadata_segment_sb_config:
+		size = PAGE_SIZE;
+		break;
+
+	case metadata_segment_sb_runtime:
+		size = PAGE_SIZE;
+		break;
+
+	case metadata_segment_reserved:
+		size = PAGE_SIZE;
+		break;
+
+	case metadata_segment_part_config:
+		size = sizeof(struct ocf_user_part_config);
+		break;
+
+	case metadata_segment_part_runtime:
+		size = sizeof(struct ocf_user_part_runtime);
+		break;
+
+	case metadata_segment_hash:
+		size = sizeof(ocf_cache_line_t);
+		break;
+
+	case metadata_segment_core_config:
+		size = sizeof(struct ocf_core_meta_config);
+		break;
+
+	case metadata_segment_core_runtime:
+		size = sizeof(struct ocf_core_meta_runtime);
+		break;
+
+	case metadata_segment_core_uuid:
+		size = sizeof(struct ocf_metadata_uuid);
+		break;
+
+	default:
+		break;
+
+	}
+
+	ENV_BUG_ON(size > PAGE_SIZE);
+
+	return size;
+}
+
+

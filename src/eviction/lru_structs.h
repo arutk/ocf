@@ -10,7 +10,7 @@ struct lru_eviction_policy_meta {
 	/* LRU pointers 2*4=8 bytes */
 	uint32_t prev;
 	uint32_t next;
-} __attribute__((packed));
+};
 
 struct lru_eviction_policy {
 	int has_clean_nodes;
