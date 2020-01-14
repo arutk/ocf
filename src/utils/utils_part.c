@@ -109,7 +109,7 @@ void ocf_part_move(struct ocf_request *req)
 		}
 
 		line = entry->coll_idx;
-		id_old = ocf_metadata_get_partition_id(cache, line);
+		id_old = ocf_metadata_hash_get_partition_id(cache, line);
 		id_new = req->part_id;
 
 		ENV_BUG_ON(id_old >= OCF_IO_CLASS_MAX ||

@@ -9,21 +9,15 @@
 /*
  * GET
  */
-static inline void
-ocf_metadata_get_cleaning_policy(struct ocf_cache *cache,
-		ocf_cache_line_t line, struct cleaning_policy_meta *policy)
-{
-	cache->metadata.iface.get_cleaning_policy(cache, line, policy);
-}
+void
+ocf_metadata_hash_get_cleaning_policy(struct ocf_cache *cache,
+		ocf_cache_line_t line, struct cleaning_policy_meta *policy);
 
 /*
  * SET
  */
-static inline void
-ocf_metadata_set_cleaning_policy(struct ocf_cache *cache,
-		ocf_cache_line_t line, struct cleaning_policy_meta *policy)
-{
-	cache->metadata.iface.set_cleaning_policy(cache, line, policy);
-}
+void
+ocf_metadata_hash_set_cleaning_policy(struct ocf_cache *cache,
+		ocf_cache_line_t line, struct cleaning_policy_meta *policy);
 
 #endif /* METADATA_CLEANING_POLICY_H_ */

@@ -58,7 +58,7 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 
 	ENV_BUG_ON(!req);
 
-	part_id = ocf_metadata_get_partition_id(cache, line);
+	part_id = ocf_metadata_hash_get_partition_id(cache, line);
 	core_id = ocf_core_get_id(req->core);
 
 	__set_cache_line_invalid(cache, start_bit, end_bit, line, core_id,
@@ -74,7 +74,7 @@ void set_cache_line_invalid_no_flush(struct ocf_cache *cache, uint8_t start_bit,
 	ocf_part_id_t part_id;
 	ocf_core_id_t core_id;
 
-	ocf_metadata_get_core_and_part_id(cache, line, &core_id, &part_id);
+	ocf_metadata_hash_get_core_and_part_id(cache, line, &core_id, &part_id);
 
 	__set_cache_line_invalid(cache, start_bit, end_bit, line, core_id,
 			part_id);
@@ -84,7 +84,7 @@ void set_cache_line_valid(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, struct ocf_request *req, uint32_t map_idx)
 {
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, line);
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache, line);
 
 	if (metadata_set_valid_sec_changed(cache, line, start_bit, end_bit)) {
 		/*
@@ -100,7 +100,7 @@ void set_cache_line_clean(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, struct ocf_request *req, uint32_t map_idx)
 {
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, line);
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache, line);
 	uint8_t evp_type = cache->conf_meta->eviction_policy_type;
 	bool line_is_clean;
 
@@ -142,7 +142,7 @@ void set_cache_line_dirty(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, struct ocf_request *req, uint32_t map_idx)
 {
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, line);
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache, line);
 	uint8_t evp_type = cache->conf_meta->eviction_policy_type;
 	bool line_was_dirty;
 

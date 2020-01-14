@@ -58,7 +58,7 @@ static int ocf_mngt_core_set_uuid_metadata(ocf_core_t core,
 		struct ocf_volume_uuid *new_uuid)
 {
 	ocf_cache_t cache = ocf_core_get_cache(core);
-	struct ocf_metadata_uuid *muuid = ocf_metadata_get_core_uuid(cache,
+	struct ocf_metadata_uuid *muuid = ocf_metadata_hash_get_core_uuid(cache,
 						ocf_core_get_id(core));
 
 	if (_ocf_uuid_set(uuid, muuid))
@@ -438,7 +438,7 @@ static void ocf_mngt_cache_add_core_insert(ocf_pipeline_t pipeline,
 	core->conf_meta->seq_no = core_sequence_no;
 
 	/* Update super-block with core device addition */
-	ocf_metadata_flush_superblock(cache,
+	ocf_metadata_hash_flush_superblock(cache,
 			_ocf_mngt_cache_add_core_flush_sb_complete, context);
 }
 
@@ -615,7 +615,7 @@ static void _ocf_mngt_cache_remove_core(ocf_pipeline_t pipeline, void *priv,
 	cache_mngt_core_close(core);
 
 	/* Update super-block with core device removal */
-	ocf_metadata_flush_superblock(cache,
+	ocf_metadata_hash_flush_superblock(cache,
 			ocf_mngt_cache_remove_core_flush_sb_complete, context);
 }
 

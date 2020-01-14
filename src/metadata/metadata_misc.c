@@ -15,7 +15,7 @@ static bool _is_cache_line_acting(struct ocf_cache *cache,
 	ocf_core_id_t tmp_core_id;
 	uint64_t core_line;
 
-	ocf_metadata_get_core_info(cache, cache_line,
+	ocf_metadata_hash_get_core_info(cache, cache_line,
 		&tmp_core_id, &core_line);
 
 	if (core_id != OCF_CORE_ID_INVALID) {
@@ -59,7 +59,7 @@ int ocf_metadata_actor(struct ocf_cache *cache,
 		for (i = cache->user_parts[part_id].runtime->head;
 				i != cache->device->collision_table_entries;
 				i = next_i) {
-			next_i = ocf_metadata_get_partition_next(cache, i);
+			next_i = ocf_metadata_hash_get_partition_next(cache, i);
 
 			if (_is_cache_line_acting(cache, i, core_id,
 					start_line, end_line)) {
@@ -95,7 +95,7 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
 	ocf_part_id_t partition_id =
-			ocf_metadata_get_partition_id(cache, cache_line);
+			ocf_metadata_hash_get_partition_id(cache, cache_line);
 
 	ocf_metadata_remove_from_collision(cache, cache_line, partition_id);
 
@@ -107,7 +107,7 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
-	ocf_metadata_start_collision_shared_access(cache, cache_line);
+	ocf_metadata_hash_start_collision_shared_access(cache, cache_line);
 
 	set_cache_line_invalid_no_flush(cache, 0, ocf_line_end_sector(cache),
 			cache_line);
@@ -117,7 +117,7 @@ static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 	 */
 	metadata_clear_dirty(cache, cache_line);
 
-	ocf_metadata_end_collision_shared_access(cache, cache_line);
+	ocf_metadata_hash_end_collision_shared_access(cache, cache_line);
 }
 
 /* caller must hold metadata lock

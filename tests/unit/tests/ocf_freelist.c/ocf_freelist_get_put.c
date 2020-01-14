@@ -75,7 +75,7 @@ struct {
 } partition_list[max_clines];
 
 
-void __wrap_ocf_metadata_set_partition_info(struct ocf_cache *cache,
+void __wrap_ocf_metadata_hash_set_partition_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_part_id_t part_id,
 		ocf_cache_line_t next_line, ocf_cache_line_t prev_line)
 {
@@ -84,7 +84,7 @@ void __wrap_ocf_metadata_set_partition_info(struct ocf_cache *cache,
 	partition_list[line].next = next_line;
 }
 
-void __wrap_ocf_metadata_get_partition_info(struct ocf_cache *cache,
+void __wrap_ocf_metadata_hash_get_partition_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_part_id_t *part_id,
 		ocf_cache_line_t *next_line, ocf_cache_line_t *prev_line)
 {
@@ -96,13 +96,13 @@ void __wrap_ocf_metadata_get_partition_info(struct ocf_cache *cache,
 		*next_line = partition_list[line].next;
 }
 
-void __wrap_ocf_metadata_set_partition_prev(struct ocf_cache *cache,
+void __wrap_ocf_metadata_hash_set_partition_prev(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_cache_line_t prev_line)
 {
 	partition_list[line].prev = prev_line;
 }
 
-void __wrap_ocf_metadata_set_partition_next(struct ocf_cache *cache,
+void __wrap_ocf_metadata_hash_set_partition_next(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_cache_line_t next_line)
 {
 	partition_list[line].next = next_line;

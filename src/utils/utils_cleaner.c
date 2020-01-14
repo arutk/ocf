@@ -336,7 +336,7 @@ static int _ocf_cleaner_update_metadata(struct ocf_request *req)
 		if (!metadata_test_dirty(cache, cache_line))
 			continue;
 
-		ocf_metadata_get_core_and_part_id(cache, cache_line,
+		ocf_metadata_hash_get_core_and_part_id(cache, cache_line,
 				&core_id, &req->part_id);
 		req->core = &cache->core[core_id];
 
@@ -488,7 +488,7 @@ static void _ocf_cleaner_core_io_for_dirty_range(struct ocf_request *req,
 	ocf_cache_t cache = req->cache;
 	struct ocf_io *io;
 	ocf_core_t core = ocf_cache_get_core(cache, iter->core_id);
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache,
 			iter->coll_idx);
 
 	addr = (ocf_line_size(cache) * iter->core_line)
@@ -671,7 +671,7 @@ static int _ocf_cleaner_fire_cache(struct ocf_request *req)
 
 		offset = ocf_line_size(cache) * iter->hash;
 
-		part_id = ocf_metadata_get_partition_id(cache, iter->coll_idx);
+		part_id = ocf_metadata_hash_get_partition_id(cache, iter->coll_idx);
 
 		io = ocf_new_cache_io(cache, req->io_queue,
 				addr, ocf_line_size(cache),
@@ -901,7 +901,7 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 		}
 
 		/* Get mapping info */
-		ocf_metadata_get_core_info(cache, cache_line, &core_id,
+		ocf_metadata_hash_get_core_info(cache, cache_line, &core_id,
 				&core_sector);
 
 		if (unlikely(!cache->core[core_id].opened)) {

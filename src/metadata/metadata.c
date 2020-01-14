@@ -107,12 +107,12 @@ void ocf_metadata_error(struct ocf_cache *cache)
 	cache->device->metadata_error = -1;
 }
 
-ocf_cache_line_t ocf_metadata_get_pages_count(struct ocf_cache *cache)
+ocf_cache_line_t ocf_metadata_hash_get_pages_count(struct ocf_cache *cache)
 {
 	return cache->metadata.iface.pages(cache);
 }
 
-ocf_cache_line_t ocf_metadata_get_cachelines_count(ocf_cache_t cache)
+ocf_cache_line_t ocf_metadata_hash_get_cachelines_count(ocf_cache_t cache)
 {
 	return cache->metadata.iface.cachelines(cache);
 }

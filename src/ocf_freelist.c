@@ -63,7 +63,7 @@ static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 	ENV_BUG_ON(cline >= line_entries);
 
 	/* Get Partition info */
-	ocf_metadata_get_partition_info(cache, cline, NULL, &next, &prev);
+	ocf_metadata_hash_get_partition_info(cache, cline, NULL, &next, &prev);
 
 	/* Find out if this node is Partition _head_ */
 	is_head = (prev == line_entries);
@@ -75,7 +75,7 @@ static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 	 * and set that there is no node left in the list.
 	 */
 	if (is_head && free == 1) {
-		ocf_metadata_set_partition_info(cache, cline, invalid_part_id,
+		ocf_metadata_hash_set_partition_info(cache, cline, invalid_part_id,
 				line_entries, line_entries);
 		freelist_part->head = line_entries;
 		freelist_part->tail = line_entries;
@@ -86,15 +86,15 @@ static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 		ENV_BUG_ON(next >= line_entries);
 
 		freelist_part->head = next;
-		ocf_metadata_set_partition_prev(cache, next, line_entries);
-		ocf_metadata_set_partition_next(cache, cline, line_entries);
+		ocf_metadata_hash_set_partition_prev(cache, next, line_entries);
+		ocf_metadata_hash_set_partition_next(cache, cline, line_entries);
 	} else if (is_tail) {
 		/* Case 3: else if this cline is partition list tail */
 		ENV_BUG_ON(prev >= line_entries);
 
 		freelist_part->tail = prev;
-		ocf_metadata_set_partition_prev(cache, cline, line_entries);
-		ocf_metadata_set_partition_next(cache, prev, line_entries);
+		ocf_metadata_hash_set_partition_prev(cache, cline, line_entries);
+		ocf_metadata_hash_set_partition_next(cache, prev, line_entries);
 	} else {
 		/* Case 4: else this collision_index is a middle node.
 		 * There is no change to the head and the tail pointers.
@@ -103,11 +103,11 @@ static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
 		ENV_BUG_ON(next >= line_entries || prev >= line_entries);
 
 		/* Update prev and next nodes */
-		ocf_metadata_set_partition_prev(cache, next, prev);
-		ocf_metadata_set_partition_next(cache, prev, next);
+		ocf_metadata_hash_set_partition_prev(cache, next, prev);
+		ocf_metadata_hash_set_partition_next(cache, prev, next);
 
 		/* Update the given node */
-		ocf_metadata_set_partition_info(cache, cline, invalid_part_id,
+		ocf_metadata_hash_set_partition_info(cache, cline, invalid_part_id,
 				line_entries, line_entries);
 	}
 
@@ -189,7 +189,7 @@ void ocf_freelist_populate(ocf_freelist_t freelist,
 			next = ocf_metadata_map_phy2lg(cache, phys);
 			++phys;
 
-			ocf_metadata_set_partition_info(cache, idx,
+			ocf_metadata_hash_set_partition_info(cache, idx,
 					PARTITION_INVALID, next, prev);
 
 			prev = idx;
@@ -199,7 +199,7 @@ void ocf_freelist_populate(ocf_freelist_t freelist,
 		}
 
 		/* terminate partition list */
-		ocf_metadata_set_partition_info(cache, idx, PARTITION_INVALID,
+		ocf_metadata_hash_set_partition_info(cache, idx, PARTITION_INVALID,
 			collision_table_entries, prev);
 
 		/* store freelist tail */
@@ -229,16 +229,16 @@ static void ocf_freelist_add_cache_line(ocf_freelist_t freelist,
 		freelist_part->head = line;
 		freelist_part->tail = line;
 
-		ocf_metadata_set_partition_info(cache, line, invalid_part_id,
+		ocf_metadata_hash_set_partition_info(cache, line, invalid_part_id,
 				line_entries, line_entries);
 	} else {
 		tail = freelist_part->tail;
 
 		ENV_BUG_ON(tail >= line_entries);
 
-		ocf_metadata_set_partition_info(cache, line, invalid_part_id,
+		ocf_metadata_hash_set_partition_info(cache, line, invalid_part_id,
 				line_entries, tail);
-		ocf_metadata_set_partition_next(cache, tail, line);
+		ocf_metadata_hash_set_partition_next(cache, tail, line);
 
 		freelist_part->tail = line;
 	}

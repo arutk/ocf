@@ -248,11 +248,11 @@ static inline void ocf_purge_map_info(struct ocf_request *req)
 					ocf_line_sectors(cache);
 		}
 
-		ocf_metadata_start_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_start_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 		_ocf_purge_cache_line_sec(cache, start_bit, end_bit, req,
 				map_idx);
-		ocf_metadata_end_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_end_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 	}
 }
@@ -301,10 +301,10 @@ static inline void ocf_set_valid_map_info(struct ocf_request *req)
 		start_bit = ocf_map_line_start_sector(req, map_idx);
 		end_bit = ocf_map_line_end_sector(req, map_idx);
 
-		ocf_metadata_start_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_start_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 		set_cache_line_valid(cache, start_bit, end_bit, req, map_idx);
-		ocf_metadata_end_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_end_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 	}
 }
@@ -329,10 +329,10 @@ static inline void ocf_set_dirty_map_info(struct ocf_request *req)
 		start_bit = ocf_map_line_start_sector(req, map_idx);
 		end_bit = ocf_map_line_end_sector(req, map_idx);
 
-		ocf_metadata_start_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_start_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 		set_cache_line_dirty(cache, start_bit, end_bit, req, map_idx);
-		ocf_metadata_end_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_end_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 	}
 }
@@ -357,10 +357,10 @@ static inline void ocf_set_clean_map_info(struct ocf_request *req)
 		start_bit = ocf_map_line_start_sector(req, map_idx);
 		end_bit = ocf_map_line_end_sector(req, map_idx);
 
-		ocf_metadata_start_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_start_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 		set_cache_line_clean(cache, start_bit, end_bit, req, map_idx);
-		ocf_metadata_end_collision_shared_access(cache, map[map_idx].
+		ocf_metadata_hash_end_collision_shared_access(cache, map[map_idx].
 				coll_idx);
 	}
 }

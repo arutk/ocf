@@ -24,7 +24,7 @@ static inline uint8_t ocf_atomic_addr2pos(struct ocf_cache *cache,
 	return addr;
 }
 
-int ocf_metadata_get_atomic_entry(ocf_cache_t cache,
+int ocf_metadata_hash_get_atomic_entry(ocf_cache_t cache,
 		uint64_t addr, struct ocf_atomic_metadata *entry)
 {
 	OCF_CHECK_NULL(cache);
@@ -43,7 +43,7 @@ int ocf_metadata_get_atomic_entry(ocf_cache_t cache,
 		ocf_core_t core;
 		uint64_t core_line = 0;
 
-		ocf_metadata_get_core_info(cache, line, &core_id, &core_line);
+		ocf_metadata_hash_get_core_info(cache, line, &core_id, &core_line);
 		core = ocf_cache_get_core(cache, core_id);
 
 		entry->core_seq_no = core->conf_meta->seq_no;

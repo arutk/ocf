@@ -2,7 +2,7 @@
  * <tested_file_path>src/metadata/metadata_collision.c</tested_file_path>
  * <tested_function>ocf_metadata_hash_func</tested_function>
  * <functions_to_leave>
- * 	ocf_metadata_get_hash
+ * 	ocf_metadata_hash_get_hash
  * </functions_to_leave>
  */
 

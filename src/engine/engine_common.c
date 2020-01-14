@@ -52,13 +52,13 @@ void ocf_engine_lookup_map_entry(struct ocf_cache *cache,
 	entry->coll_idx = cache->device->collision_table_entries;
 	entry->core_line = core_line;
 
-	line = ocf_metadata_get_hash(cache, hash);
+	line = ocf_metadata_hash_get_hash(cache, hash);
 
 	while (line != cache->device->collision_table_entries) {
 		ocf_core_id_t curr_core_id;
 		uint64_t curr_core_line;
 
-		ocf_metadata_get_core_info(cache, line, &curr_core_id,
+		ocf_metadata_hash_get_core_info(cache, line, &curr_core_id,
 				&curr_core_line);
 
 		if (core_id == curr_core_id && curr_core_line == core_line) {
@@ -67,7 +67,7 @@ void ocf_engine_lookup_map_entry(struct ocf_cache *cache,
 			break;
 		}
 
-		line = ocf_metadata_get_collision_next(cache, line);
+		line = ocf_metadata_hash_get_collision_next(cache, line);
 	}
 }
 
@@ -82,7 +82,7 @@ static inline int _ocf_engine_check_map_entry(struct ocf_cache *cache,
 
 	ENV_BUG_ON(entry->coll_idx >= cache->device->collision_table_entries);
 
-	ocf_metadata_get_core_info(cache, entry->coll_idx, &_core_id,
+	ocf_metadata_hash_get_core_info(cache, entry->coll_idx, &_core_id,
 			&_core_line);
 
 	if (core_id == _core_id && _core_line == entry->core_line)
@@ -121,7 +121,7 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 				req->info.dirty_all++;
 		}
 
-		if (req->part_id != ocf_metadata_get_partition_id(cache,
+		if (req->part_id != ocf_metadata_hash_get_partition_id(cache,
 				_entry->coll_idx)) {
 			/*
 			 * Need to move this cache line into other partition
@@ -260,10 +260,10 @@ static void ocf_engine_map_cache_line(struct ocf_request *req,
 	ocf_metadata_add_to_partition(cache, part_id, *cache_line);
 
 	/* Add the block to the corresponding collision list */
-	ocf_metadata_start_collision_shared_access(cache, *cache_line);
+	ocf_metadata_hash_start_collision_shared_access(cache, *cache_line);
 	ocf_metadata_add_to_collision(cache, core_id, core_line, hash_index,
 			*cache_line);
-	ocf_metadata_end_collision_shared_access(cache, *cache_line);
+	ocf_metadata_hash_end_collision_shared_access(cache, *cache_line);
 
 	ocf_eviction_init_cache_line(cache, *cache_line, part_id);
 
@@ -298,14 +298,14 @@ static void ocf_engine_map_hndl_error(struct ocf_cache *cache,
 			OCF_DEBUG_RQ(req, "Canceling cache line %u",
 					entry->coll_idx);
 
-			ocf_metadata_start_collision_shared_access(cache,
+			ocf_metadata_hash_start_collision_shared_access(cache,
 					entry->coll_idx);
 
 			set_cache_line_invalid_no_flush(cache, 0,
 					ocf_line_end_sector(cache),
 					entry->coll_idx);
 
-			ocf_metadata_end_collision_shared_access(cache,
+			ocf_metadata_hash_end_collision_shared_access(cache,
 					entry->coll_idx);
 
 			break;

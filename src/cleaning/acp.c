@@ -158,21 +158,21 @@ static struct acp_cleaning_policy_meta* _acp_meta_get(
 		struct ocf_cache *cache, uint32_t cache_line,
 		struct cleaning_policy_meta *policy_meta)
 {
-	ocf_metadata_get_cleaning_policy(cache, cache_line, policy_meta);
+	ocf_metadata_hash_get_cleaning_policy(cache, cache_line, policy_meta);
 	return &policy_meta->meta.acp;
 }
 
 static void _acp_meta_set(struct ocf_cache *cache, uint32_t cache_line,
 		struct cleaning_policy_meta *policy_meta)
 {
-	ocf_metadata_set_cleaning_policy(cache, cache_line, policy_meta);
+	ocf_metadata_hash_set_cleaning_policy(cache, cache_line, policy_meta);
 }
 
 static struct acp_core_line_info _acp_core_line_info(struct ocf_cache *cache,
 		ocf_cache_line_t cache_line)
 {
 	struct acp_core_line_info acp_core_line_info = {.cache_line = cache_line, };
-	ocf_metadata_get_core_info(cache, cache_line, &acp_core_line_info.core_id,
+	ocf_metadata_hash_get_core_info(cache, cache_line, &acp_core_line_info.core_id,
 		&acp_core_line_info.core_line);
 	return acp_core_line_info;
 }
@@ -251,7 +251,7 @@ static void _acp_rebuild(struct ocf_cache *cache)
 	uint32_t step = 0;
 
 	for (cline = 0; cline < cache->device->collision_table_entries; cline++) {
-		ocf_metadata_get_core_and_part_id(cache, cline, &cline_core_id,
+		ocf_metadata_hash_get_core_and_part_id(cache, cline, &cline_core_id,
 				NULL);
 
 		OCF_COND_RESCHED_DEFAULT(step);

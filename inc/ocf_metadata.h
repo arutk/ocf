@@ -48,7 +48,7 @@ struct ocf_atomic_metadata {
  * @retval 0 Metadata retrieved successfully
  * @retval Non-zero Error
  */
-int ocf_metadata_get_atomic_entry(ocf_cache_t cache, uint64_t addr,
+int ocf_metadata_hash_get_atomic_entry(ocf_cache_t cache, uint64_t addr,
 		struct ocf_atomic_metadata *entry);
 
 /**

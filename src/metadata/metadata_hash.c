@@ -1090,8 +1090,8 @@ static inline void _ocf_init_collision_entry(struct ocf_cache *cache,
 {
 	ocf_cache_line_t invalid_idx = cache->device->collision_table_entries;
 
-	ocf_metadata_set_collision_info(cache, idx, invalid_idx, invalid_idx);
-	ocf_metadata_set_core_info(cache, idx,
+	ocf_metadata_hash_set_collision_info(cache, idx, invalid_idx, invalid_idx);
+	ocf_metadata_hash_set_core_info(cache, idx,
 			OCF_CORE_MAX, ULONG_MAX);
 	metadata_init_status_bits(cache, idx);
 }
@@ -1125,7 +1125,7 @@ static void ocf_metadata_hash_init_hash_table(struct ocf_cache *cache)
 		 * thus it shall be initialized in improper values
 		 * from collision_table
 		 **/
-		ocf_metadata_set_hash(cache, i, invalid_idx);
+		ocf_metadata_hash_set_hash(cache, i, invalid_idx);
 	}
 
 }
@@ -1316,7 +1316,7 @@ static void ocf_medatata_hash_load_superblock_post(ocf_pipeline_t pipeline,
 	sb_config = METADATA_MEM_POOL(ctrl, metadata_segment_sb_config);
 
 	for_each_core_metadata(cache, core, core_id) {
-		muuid = ocf_metadata_get_core_uuid(cache, core_id);
+		muuid = ocf_metadata_hash_get_core_uuid(cache, core_id);
 		uuid.data = muuid->data;
 		uuid.size = muuid->size;
 
@@ -1436,7 +1436,7 @@ struct ocf_pipeline_properties ocf_metadata_hash_load_sb_pipeline_props = {
 /*
  * Super Block - Load, This function has to prevent to pointers overwrite
  */
-static void ocf_metadata_hash_load_superblock(ocf_cache_t cache,
+void ocf_metadata_hash_load_superblock(ocf_cache_t cache,
 		ocf_metadata_end_t cmpl, void *priv)
 {
 	struct ocf_metadata_hash_context *context;
@@ -1584,7 +1584,7 @@ struct ocf_pipeline_properties ocf_metadata_hash_flush_sb_pipeline_props = {
 /*
  * Super Block - FLUSH
  */
-static void ocf_metadata_hash_flush_superblock(ocf_cache_t cache,
+void ocf_metadata_hash_flush_superblock(ocf_cache_t cache,
 		ocf_metadata_end_t cmpl, void *priv)
 {
 	struct ocf_metadata_hash_context *context;
@@ -1616,7 +1616,7 @@ static void ocf_metadata_hash_flush_superblock(ocf_cache_t cache,
  *
  * @return Operation status (0 success, otherwise error)
  */
-static void ocf_metadata_hash_set_shutdown_status(ocf_cache_t cache,
+void ocf_metadata_hash_set_shutdown_status(ocf_cache_t cache,
 		enum ocf_metadata_shutdown_status shutdown_status,
 		ocf_metadata_end_t cmpl, void *priv)
 {
@@ -1647,7 +1647,7 @@ static void ocf_metadata_hash_set_shutdown_status(ocf_cache_t cache,
  * RESERVED AREA
  ******************************************************************************/
 
-static uint64_t ocf_metadata_hash_get_reserved_lba(
+uint64_t ocf_metadata_hash_get_reserved_lba(
 		struct ocf_cache *cache)
 {
 	struct ocf_metadata_hash_ctrl *ctrl;
@@ -1932,7 +1932,7 @@ static void _recovery_reset_cline_metadata(struct ocf_cache *cache,
 {
 	ocf_cleaning_t clean_policy_type;
 
-	ocf_metadata_set_core_info(cache, cline, OCF_CORE_MAX, ULLONG_MAX);
+	ocf_metadata_hash_set_core_info(cache, cline, OCF_CORE_MAX, ULLONG_MAX);
 
 	metadata_clear_valid(cache, cline);
 
@@ -1961,7 +1961,7 @@ static void _recovery_rebuild_metadata(ocf_pipeline_t pipeline,
 	ocf_metadata_start_exclusive_access(&cache->metadata.lock);
 
 	for (cline = 0; cline < collision_table_entries; cline++) {
-		ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
+		ocf_metadata_hash_get_core_info(cache, cline, &core_id, &core_line);
 		if (core_id != OCF_CORE_MAX &&
 				(!dirty_only || metadata_test_dirty(cache,
 						cline))) {
@@ -2096,7 +2096,7 @@ static int ocf_metadata_hash_load_atomic_metadata_drain(void *priv,
 
 		if (meta.valid && core_id != OCF_CORE_ID_INVALID) {
 			if (!core_line_ok) {
-				ocf_metadata_set_core_info(cache, line,
+				ocf_metadata_hash_set_core_info(cache, line,
 							core_id, core_line);
 				core_line_ok = true;
 			}
@@ -2200,7 +2200,7 @@ static void ocf_metadata_hash_load_recovery(ocf_cache_t cache,
 /*******************************************************************************
  * Core Info
  ******************************************************************************/
-static void ocf_metadata_hash_get_core_info(struct ocf_cache *cache,
+void ocf_metadata_hash_get_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t *core_id,
 		uint64_t *core_sector)
 {
@@ -2225,7 +2225,7 @@ static void ocf_metadata_hash_get_core_info(struct ocf_cache *cache,
 	}
 }
 
-static void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
+void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t core_id,
 		uint64_t core_sector)
 {
@@ -2244,7 +2244,7 @@ static void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
 	}
 }
 
-static ocf_core_id_t ocf_metadata_hash_get_core_id(
+ocf_core_id_t ocf_metadata_hash_get_core_id(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
 	const struct ocf_metadata_map *collision;
@@ -2261,7 +2261,7 @@ static ocf_core_id_t ocf_metadata_hash_get_core_id(
 	return OCF_CORE_MAX;
 }
 
-static struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
+struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
 		struct ocf_cache *cache, ocf_core_id_t core_id)
 {
 	struct ocf_metadata_uuid *muuid;
@@ -2281,7 +2281,7 @@ static struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
  * Core and part id
  ******************************************************************************/
 
-static void ocf_metadata_hash_get_core_and_part_id(
+void ocf_metadata_hash_get_core_and_part_id(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_core_id_t *core_id, ocf_part_id_t *part_id)
 {
@@ -2316,7 +2316,7 @@ static void ocf_metadata_hash_get_core_and_part_id(
 /*
  * Hash Table - Get
  */
-static ocf_cache_line_t ocf_metadata_hash_get_hash(
+ocf_cache_line_t ocf_metadata_hash_get_hash(
 		struct ocf_cache *cache, ocf_cache_line_t index)
 {
 	ocf_cache_line_t line = cache->device->collision_table_entries;
@@ -2336,7 +2336,7 @@ static ocf_cache_line_t ocf_metadata_hash_get_hash(
 /*
  * Hash Table - Set
  */
-static void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
+void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 		ocf_cache_line_t index, ocf_cache_line_t line)
 {
 	int result = 0;
@@ -2357,7 +2357,7 @@ static void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 /*
  * Cleaning policy - Get
  */
-static void ocf_metadata_hash_get_cleaning_policy(
+void ocf_metadata_hash_get_cleaning_policy(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		struct cleaning_policy_meta *cleaning_policy)
 {
@@ -2376,7 +2376,7 @@ static void ocf_metadata_hash_get_cleaning_policy(
 /*
  * Cleaning policy - Set
  */
-static void ocf_metadata_hash_set_cleaning_policy(
+void ocf_metadata_hash_set_cleaning_policy(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		struct cleaning_policy_meta *cleaning_policy)
 {
@@ -2399,7 +2399,7 @@ static void ocf_metadata_hash_set_cleaning_policy(
 /*
  * Eviction policy - Get
  */
-static void ocf_metadata_hash_get_eviction_policy(
+void ocf_metadata_hash_get_eviction_policy(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		union eviction_policy_meta *eviction_policy)
 {
@@ -2418,7 +2418,7 @@ static void ocf_metadata_hash_get_eviction_policy(
 /*
  * Cleaning policy - Set
  */
-static void ocf_metadata_hash_set_eviction_policy(
+void ocf_metadata_hash_set_eviction_policy(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		union eviction_policy_meta *eviction_policy)
 {
@@ -2508,7 +2508,7 @@ static ocf_cache_line_t ocf_metadata_hash_map_phy2lg_striping(
 	return coll_idx;
 }
 
-static void ocf_metadata_hash_set_collision_info(
+void ocf_metadata_hash_set_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next, ocf_cache_line_t prev)
 {
@@ -2527,7 +2527,7 @@ static void ocf_metadata_hash_set_collision_info(
 	}
 }
 
-static void ocf_metadata_hash_set_collision_next(
+void ocf_metadata_hash_set_collision_next(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next)
 {
@@ -2544,7 +2544,7 @@ static void ocf_metadata_hash_set_collision_next(
 		ocf_metadata_error(cache);
 }
 
-static void ocf_metadata_hash_set_collision_prev(
+void ocf_metadata_hash_set_collision_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t prev)
 {
@@ -2561,7 +2561,7 @@ static void ocf_metadata_hash_set_collision_prev(
 		ocf_metadata_error(cache);
 }
 
-static void ocf_metadata_hash_get_collision_info(
+void ocf_metadata_hash_get_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t *next, ocf_cache_line_t *prev)
 {
@@ -2616,7 +2616,7 @@ void ocf_metadata_hash_end_collision_shared_access(struct ocf_cache *cache,
  *  Partition
  ******************************************************************************/
 
-static void ocf_metadata_hash_get_partition_info(
+void ocf_metadata_hash_get_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_part_id_t *part_id, ocf_cache_line_t *next_line,
 		ocf_cache_line_t *prev_line)
@@ -2646,7 +2646,7 @@ static void ocf_metadata_hash_get_partition_info(
 	}
 }
 
-static void ocf_metadata_hash_set_partition_next(
+void ocf_metadata_hash_set_partition_next(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t next_line)
 {
@@ -2663,7 +2663,7 @@ static void ocf_metadata_hash_set_partition_next(
 		ocf_metadata_error(cache);
 }
 
-static void ocf_metadata_hash_set_partition_prev(
+void ocf_metadata_hash_set_partition_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_cache_line_t prev_line)
 {
@@ -2680,7 +2680,7 @@ static void ocf_metadata_hash_set_partition_prev(
 		ocf_metadata_error(cache);
 }
 
-static void ocf_metadata_hash_set_partition_info(
+void ocf_metadata_hash_set_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_part_id_t part_id, ocf_cache_line_t next_line,
 		ocf_cache_line_t prev_line)
@@ -2783,13 +2783,10 @@ static const struct ocf_metadata_iface metadata_hash_iface = {
 	/*
 	 * Cleaning Policy
 	 */
-	.get_cleaning_policy = ocf_metadata_hash_get_cleaning_policy,
-	.set_cleaning_policy = ocf_metadata_hash_set_cleaning_policy,
 
 	/*
 	 * Eviction Policy
 	 */
-	.get_eviction_policy = ocf_metadata_hash_get_eviction_policy,
 	.set_eviction_policy = ocf_metadata_hash_set_eviction_policy,
 };
 
@@ -2831,14 +2828,14 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_dirty = _ocf_metadata_test_dirty_u8;
 		iface->test_out_dirty = _ocf_metadata_test_out_dirty_u8;
 		iface->clear_dirty = _ocf_metadata_clear_dirty_u8;
-		iface->set_dirty = _ocf_metadata_set_dirty_u8;
+		iface->set_dirty = _ocf_metadata_hash_set_dirty_u8;
 		iface->test_and_set_dirty = _ocf_metadata_test_and_set_dirty_u8;
 		iface->test_and_clear_dirty =
 				_ocf_metadata_test_and_clear_dirty_u8;
 		iface->test_valid = _ocf_metadata_test_valid_u8;
 		iface->test_out_valid = _ocf_metadata_test_out_valid_u8;
 		iface->clear_valid = _ocf_metadata_clear_valid_u8;
-		iface->set_valid = _ocf_metadata_set_valid_u8;
+		iface->set_valid = _ocf_metadata_hash_set_valid_u8;
 		iface->test_and_set_valid = _ocf_metadata_test_and_set_valid_u8;
 		iface->test_and_clear_valid =
 				_ocf_metadata_test_and_clear_valid_u8;
@@ -2848,7 +2845,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_dirty = _ocf_metadata_test_dirty_u16;
 		iface->test_out_dirty = _ocf_metadata_test_out_dirty_u16;
 		iface->clear_dirty = _ocf_metadata_clear_dirty_u16;
-		iface->set_dirty = _ocf_metadata_set_dirty_u16;
+		iface->set_dirty = _ocf_metadata_hash_set_dirty_u16;
 		iface->test_and_set_dirty =
 				_ocf_metadata_test_and_set_dirty_u16;
 		iface->test_and_clear_dirty =
@@ -2856,7 +2853,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_valid = _ocf_metadata_test_valid_u16;
 		iface->test_out_valid = _ocf_metadata_test_out_valid_u16;
 		iface->clear_valid = _ocf_metadata_clear_valid_u16;
-		iface->set_valid = _ocf_metadata_set_valid_u16;
+		iface->set_valid = _ocf_metadata_hash_set_valid_u16;
 		iface->test_and_set_valid =
 				_ocf_metadata_test_and_set_valid_u16;
 		iface->test_and_clear_valid =
@@ -2867,7 +2864,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_dirty = _ocf_metadata_test_dirty_u32;
 		iface->test_out_dirty = _ocf_metadata_test_out_dirty_u32;
 		iface->clear_dirty = _ocf_metadata_clear_dirty_u32;
-		iface->set_dirty = _ocf_metadata_set_dirty_u32;
+		iface->set_dirty = _ocf_metadata_hash_set_dirty_u32;
 		iface->test_and_set_dirty =
 				_ocf_metadata_test_and_set_dirty_u32;
 		iface->test_and_clear_dirty =
@@ -2875,7 +2872,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_valid = _ocf_metadata_test_valid_u32;
 		iface->test_out_valid = _ocf_metadata_test_out_valid_u32;
 		iface->clear_valid = _ocf_metadata_clear_valid_u32;
-		iface->set_valid = _ocf_metadata_set_valid_u32;
+		iface->set_valid = _ocf_metadata_hash_set_valid_u32;
 		iface->test_and_set_valid =
 				_ocf_metadata_test_and_set_valid_u32;
 		iface->test_and_clear_valid =
@@ -2885,7 +2882,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_dirty = _ocf_metadata_test_dirty_u64;
 		iface->test_out_dirty = _ocf_metadata_test_out_dirty_u64;
 		iface->clear_dirty = _ocf_metadata_clear_dirty_u64;
-		iface->set_dirty = _ocf_metadata_set_dirty_u64;
+		iface->set_dirty = _ocf_metadata_hash_set_dirty_u64;
 		iface->test_and_set_dirty =
 				_ocf_metadata_test_and_set_dirty_u64;
 		iface->test_and_clear_dirty =
@@ -2893,7 +2890,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_valid = _ocf_metadata_test_valid_u64;
 		iface->test_out_valid = _ocf_metadata_test_out_valid_u64;
 		iface->clear_valid = _ocf_metadata_clear_valid_u64;
-		iface->set_valid = _ocf_metadata_set_valid_u64;
+		iface->set_valid = _ocf_metadata_hash_set_valid_u64;
 		iface->test_and_set_valid =
 				_ocf_metadata_test_and_set_valid_u64;
 		iface->test_and_clear_valid =
@@ -2904,7 +2901,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_dirty = _ocf_metadata_test_dirty_u128;
 		iface->test_out_dirty = _ocf_metadata_test_out_dirty_u128;
 		iface->clear_dirty = _ocf_metadata_clear_dirty_u128;
-		iface->set_dirty = _ocf_metadata_set_dirty_u128;
+		iface->set_dirty = _ocf_metadata_hash_set_dirty_u128;
 		iface->test_and_set_dirty =
 				_ocf_metadata_test_and_set_dirty_u128;
 		iface->test_and_clear_dirty =
@@ -2912,7 +2909,7 @@ static void ocf_metadata_hash_init_iface(struct ocf_cache *cache,
 		iface->test_valid = _ocf_metadata_test_valid_u128;
 		iface->test_out_valid = _ocf_metadata_test_out_valid_u128;
 		iface->clear_valid = _ocf_metadata_clear_valid_u128;
-		iface->set_valid = _ocf_metadata_set_valid_u128;
+		iface->set_valid = _ocf_metadata_hash_set_valid_u128;
 		iface->test_and_set_valid =
 				_ocf_metadata_test_and_set_valid_u128;
 		iface->test_and_clear_valid =

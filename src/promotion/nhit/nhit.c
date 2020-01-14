@@ -32,7 +32,7 @@ static uint64_t nhit_sizeof(ocf_cache_t cache)
 	uint64_t size = 0;
 
 	size += sizeof(struct nhit_policy_context);
-	size += nhit_hash_sizeof(ocf_metadata_get_cachelines_count(cache) *
+	size += nhit_hash_sizeof(ocf_metadata_hash_get_cachelines_count(cache) *
 			NHIT_MAPPING_RATIO);
 
 	return size;
@@ -63,7 +63,7 @@ ocf_error_t nhit_init(ocf_cache_t cache)
 		goto exit;
 	}
 
-	result = nhit_hash_init(ocf_metadata_get_cachelines_count(cache) *
+	result = nhit_hash_init(ocf_metadata_hash_get_cachelines_count(cache) *
 			NHIT_MAPPING_RATIO, &ctx->hash_map);
 	if (result)
 		goto dealloc_ctx;
@@ -228,7 +228,7 @@ bool nhit_req_should_promote(ocf_promotion_policy_t policy,
 
 	if (occupied_cachelines < OCF_DIV_ROUND_UP(
 			((uint64_t)cfg->trigger_threshold *
-			ocf_metadata_get_cachelines_count(policy->owner)), 100)) {
+			ocf_metadata_hash_get_cachelines_count(policy->owner)), 100)) {
 		return true;
 	}
 

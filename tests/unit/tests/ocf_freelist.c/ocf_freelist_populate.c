@@ -46,7 +46,7 @@ bool __wrap_metadata_test_valid_any(ocf_cache_t cache, ocf_cache_line_t cline)
 	return mock();
 }
 
-void __wrap_ocf_metadata_set_partition_info(struct ocf_cache *cache,
+void __wrap_ocf_metadata_hash_set_partition_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_part_id_t part_id,
 		ocf_cache_line_t next_line, ocf_cache_line_t prev_line)
 {
@@ -58,10 +58,10 @@ void __wrap_ocf_metadata_set_partition_info(struct ocf_cache *cache,
 }
 
 #define expect_set_info(curr, part, next, prev) \
-	expect_value(__wrap_ocf_metadata_set_partition_info, line, curr); \
-	expect_value(__wrap_ocf_metadata_set_partition_info, part_id, part); \
-	expect_value(__wrap_ocf_metadata_set_partition_info, next_line, next); \
-	expect_value(__wrap_ocf_metadata_set_partition_info, prev_line, prev);
+	expect_value(__wrap_ocf_metadata_hash_set_partition_info, line, curr); \
+	expect_value(__wrap_ocf_metadata_hash_set_partition_info, part_id, part); \
+	expect_value(__wrap_ocf_metadata_hash_set_partition_info, next_line, next); \
+	expect_value(__wrap_ocf_metadata_hash_set_partition_info, prev_line, prev);
 
 static void ocf_freelist_populate_test01(void **state)
 {

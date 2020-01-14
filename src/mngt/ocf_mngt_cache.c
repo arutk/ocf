@@ -855,7 +855,7 @@ static void _ocf_mngt_test_volume(ocf_pipeline_t pipeline,
 	if (!context->cfg.perform_test)
 		OCF_PL_NEXT_RET(pipeline);
 
-	context->test.reserved_lba_addr = ocf_metadata_get_reserved_lba(cache);
+	context->test.reserved_lba_addr = ocf_metadata_hash_get_reserved_lba(cache);
 
 	context->test.rw_buffer = env_malloc(PAGE_SIZE, ENV_MEM_NORMAL);
 	if (!context->test.rw_buffer)
@@ -1305,7 +1305,7 @@ static void _ocf_mngt_attach_load_superblock_complete(void *priv, int error)
 	ocf_cache_t cache = context->cache;
 
 	if (cache->conf_meta->cachelines !=
-			ocf_metadata_get_cachelines_count(cache)) {
+	    		ocf_metadata_hash_get_cachelines_count(cache)) {
 		ocf_cache_log(cache, log_err,
 				"ERROR: Cache device size mismatch!\n");
 		OCF_PL_FINISH_RET(context->pipeline,
@@ -1332,7 +1332,7 @@ static void _ocf_mngt_attach_load_superblock(ocf_pipeline_t pipeline,
 		OCF_PL_NEXT_RET(context->pipeline);
 
 	ocf_cache_log(cache, log_info, "Loading cache state...\n");
-	ocf_metadata_load_superblock(cache,
+	ocf_metadata_hash_load_superblock(cache,
 			_ocf_mngt_attach_load_superblock_complete, context);
 }
 
@@ -1488,7 +1488,7 @@ static void _ocf_mngt_attach_shutdown_status(ocf_pipeline_t pipeline,
 	ocf_cache_t cache = context->cache;
 
 	/* clear clean shutdown status */
-	ocf_metadata_set_shutdown_status(cache, ocf_metadata_dirty_shutdown,
+	ocf_metadata_hash_set_shutdown_status(cache, ocf_metadata_dirty_shutdown,
 		_ocf_mngt_attach_shutdown_status_complete, context);
 }
 
@@ -2009,7 +2009,7 @@ static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
 
 	if (!stop) {
 		/* Just set correct shutdown status */
-		ocf_metadata_set_shutdown_status(cache, ocf_metadata_detached,
+		ocf_metadata_hash_set_shutdown_status(cache, ocf_metadata_detached,
 				_ocf_mngt_cache_unplug_complete, context);
 	} else {
 		/* Flush metadata */
@@ -2194,7 +2194,7 @@ void ocf_mngt_cache_save(ocf_cache_t cache,
 	context->pipeline = pipeline;
 	context->cache = cache;
 
-	ocf_metadata_flush_superblock(cache,
+	ocf_metadata_hash_flush_superblock(cache,
 			ocf_mngt_cache_save_flush_sb_complete, context);
 }
 

@@ -32,7 +32,7 @@ void ocf_metadata_add_to_partition(struct ocf_cache *cache,
 	if (!part->runtime->curr_size) {
 
 		update_partition_head(cache, part_id, line);
-		ocf_metadata_set_partition_info(cache, line, part_id,
+		ocf_metadata_hash_set_partition_info(cache, line, part_id,
 				line_entries, line_entries);
 
 		if (!ocf_part_is_valid(part)) {
@@ -48,10 +48,10 @@ void ocf_metadata_add_to_partition(struct ocf_cache *cache,
 
 		ENV_BUG_ON(!(line_head < line_entries));
 
-		ocf_metadata_set_partition_info(cache, line, part_id,
+		ocf_metadata_hash_set_partition_info(cache, line, part_id,
 				line_head, line_entries);
 
-		ocf_metadata_set_partition_prev(cache, line_head, line);
+		ocf_metadata_hash_set_partition_prev(cache, line_head, line);
 
 		update_partition_head(cache, part_id, line);
 	}
@@ -75,7 +75,7 @@ void ocf_metadata_remove_from_partition(struct ocf_cache *cache,
 	ocf_metadata_partition_lock(&cache->metadata.lock, part_id);
 
 	/* Get Partition info */
-	ocf_metadata_get_partition_info(cache, line, NULL,
+	ocf_metadata_hash_get_partition_info(cache, line, NULL,
 			&next_line, &prev_line);
 
 	/* Find out if this node is Partition _head_ */
@@ -86,7 +86,7 @@ void ocf_metadata_remove_from_partition(struct ocf_cache *cache,
 	 * and set that there is no node left in the list.
 	 */
 	if (is_head && (part->runtime->curr_size == 1)) {
-		ocf_metadata_set_partition_info(cache, line,
+		ocf_metadata_hash_set_partition_info(cache, line,
 				part_id, line_entries, line_entries);
 
 		update_partition_head(cache, part_id, line_entries);
@@ -105,18 +105,18 @@ void ocf_metadata_remove_from_partition(struct ocf_cache *cache,
 		ENV_BUG_ON(!(next_line < line_entries));
 		update_partition_head(cache, part_id, next_line);
 
-		ocf_metadata_set_partition_next(cache, line, line_entries);
+		ocf_metadata_hash_set_partition_next(cache, line, line_entries);
 
-		ocf_metadata_set_partition_prev(cache, next_line,
+		ocf_metadata_hash_set_partition_prev(cache, next_line,
 				line_entries);
 	} else if (is_tail) {
 		/* Case 3: else if this collision_index is partition list tail
 		 */
 		ENV_BUG_ON(!(prev_line < line_entries));
 
-		ocf_metadata_set_partition_prev(cache, line, line_entries);
+		ocf_metadata_hash_set_partition_prev(cache, line, line_entries);
 
-		ocf_metadata_set_partition_next(cache, prev_line,
+		ocf_metadata_hash_set_partition_next(cache, prev_line,
 				line_entries);
 	} else {
 		/* Case 4: else this collision_index is a middle node.
@@ -127,12 +127,12 @@ void ocf_metadata_remove_from_partition(struct ocf_cache *cache,
 		ENV_BUG_ON(!(prev_line < line_entries));
 
 		/* Update prev and next nodes */
-		ocf_metadata_set_partition_next(cache, prev_line, next_line);
+		ocf_metadata_hash_set_partition_next(cache, prev_line, next_line);
 
-		ocf_metadata_set_partition_prev(cache, next_line, prev_line);
+		ocf_metadata_hash_set_partition_prev(cache, next_line, prev_line);
 
 		/* Update the given node */
-		ocf_metadata_set_partition_info(cache, line, part_id,
+		ocf_metadata_hash_set_partition_info(cache, line, part_id,
 				line_entries, line_entries);
 	}
 

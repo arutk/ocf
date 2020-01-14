@@ -41,60 +41,48 @@ struct ocf_metadata_map {
 static inline ocf_cache_line_t ocf_metadata_map_lg2phy(
 		struct ocf_cache *cache, ocf_cache_line_t coll_idx)
 {
-	return cache->metadata.iface.layout_iface->lg2phy(cache,
-		    coll_idx);
+	 return cache->metadata.iface.layout_iface->lg2phy(cache,
+			coll_idx);
 }
 
 static inline ocf_cache_line_t ocf_metadata_map_phy2lg(
 		struct ocf_cache *cache, ocf_cache_line_t cache_line)
 {
-	return cache->metadata.iface.layout_iface->phy2lg(cache,
-		    cache_line);
+	 return cache->metadata.iface.layout_iface->phy2lg(cache,
+			cache_line);
 }
 
-static inline void ocf_metadata_set_collision_info(
+void ocf_metadata_hash_set_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t next, ocf_cache_line_t prev)
-{
-	cache->metadata.iface.set_collision_info(cache, line, next, prev);
-}
+		ocf_cache_line_t next, ocf_cache_line_t prev);
 
-static inline void ocf_metadata_set_collision_next(
+void ocf_metadata_hash_set_collision_next(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t next)
-{
-	cache->metadata.iface.set_collision_next(cache, line, next);
-}
+		ocf_cache_line_t next);
 
-static inline void ocf_metadata_set_collision_prev(
+void ocf_metadata_hash_set_collision_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t prev)
-{
-	cache->metadata.iface.set_collision_prev(cache, line, prev);
-}
+		ocf_cache_line_t prev);
 
-static inline void ocf_metadata_get_collision_info(
+ void ocf_metadata_hash_get_collision_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t *next, ocf_cache_line_t *prev)
-{
-	cache->metadata.iface.get_collision_info(cache, line, next, prev);
-}
+		ocf_cache_line_t *next, ocf_cache_line_t *prev);
 
-static inline ocf_cache_line_t ocf_metadata_get_collision_next(
+static inline ocf_cache_line_t ocf_metadata_hash_get_collision_next(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
 	ocf_cache_line_t next;
 
-	ocf_metadata_get_collision_info(cache, line, &next, NULL);
+	ocf_metadata_hash_get_collision_info(cache, line, &next, NULL);
 	return next;
 }
 
-static inline ocf_cache_line_t ocf_metadata_get_collision_prev(
+static inline ocf_cache_line_t ocf_metadata_hash_get_collision_prev(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
 	ocf_cache_line_t prev;
 
-	ocf_metadata_get_collision_info(cache, line, NULL, &prev);
+	ocf_metadata_hash_get_collision_info(cache, line, NULL, &prev);
 	return prev;
 }
 
@@ -105,16 +93,10 @@ void ocf_metadata_add_to_collision(struct ocf_cache *cache,
 void ocf_metadata_remove_from_collision(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_part_id_t part_id);
 
-static inline void ocf_metadata_start_collision_shared_access(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	cache->metadata.iface.start_collision_shared_access(cache, line);
-}
+ void ocf_metadata_hash_start_collision_shared_access(
+		struct ocf_cache *cache, ocf_cache_line_t line);
 
-static inline void ocf_metadata_end_collision_shared_access(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	cache->metadata.iface.end_collision_shared_access(cache, line);
-}
+ void ocf_metadata_hash_end_collision_shared_access(
+		struct ocf_cache *cache, ocf_cache_line_t line);
 
 #endif /* METADATA_COLLISION_H_ */

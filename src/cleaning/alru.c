@@ -112,13 +112,13 @@ static void add_alru_head(struct ocf_cache *cache, int partition_id,
 	if (env_atomic_read(&part->runtime->cleaning.policy.alru.size) == 0) {
 		update_alru_head_tail(cache, partition_id, collision_index);
 
-		ocf_metadata_get_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_get_cleaning_policy(cache, collision_index,
 				&policy);
 		policy.meta.alru.lru_next = collision_table_entries;
 		policy.meta.alru.lru_prev = collision_table_entries;
 		policy.meta.alru.timestamp = env_ticks_to_secs(
 			env_get_tick_count());
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 						&policy);
 	} else {
 		/* Not the first node to be added. */
@@ -127,19 +127,19 @@ static void add_alru_head(struct ocf_cache *cache, int partition_id,
 
 		ENV_BUG_ON(!(curr_head_index < collision_table_entries));
 
-		ocf_metadata_get_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_get_cleaning_policy(cache, collision_index,
 				&policy);
 		policy.meta.alru.lru_next = curr_head_index;
 		policy.meta.alru.lru_prev = collision_table_entries;
 		policy.meta.alru.timestamp = env_ticks_to_secs(
 			env_get_tick_count());
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 				&policy);
 
-		ocf_metadata_get_cleaning_policy(cache, curr_head_index,
+		ocf_metadata_hash_get_cleaning_policy(cache, curr_head_index,
 				&policy);
 		policy.meta.alru.lru_prev = collision_index;
-		ocf_metadata_set_cleaning_policy(cache, curr_head_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, curr_head_index,
 				&policy);
 
 		update_alru_head(cache, partition_id, collision_index);
@@ -167,7 +167,7 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		ENV_BUG();
 	}
 
-	ocf_metadata_get_cleaning_policy(cache, collision_index, &policy);
+	ocf_metadata_hash_get_cleaning_policy(cache, collision_index, &policy);
 
 	/* Set prev and next (even if non existent) */
 	next_lru_node = policy.meta.alru.lru_next;
@@ -189,7 +189,7 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		policy.meta.alru.lru_next = collision_table_entries;
 		policy.meta.alru.lru_prev = collision_table_entries;
 
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 				&policy);
 
 		update_alru_head_tail(cache, partition_id,
@@ -205,7 +205,7 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 
 		ENV_BUG_ON(!(next_lru_node < collision_table_entries));
 
-		ocf_metadata_get_cleaning_policy(cache, next_lru_node,
+		ocf_metadata_hash_get_cleaning_policy(cache, next_lru_node,
 				&next_policy);
 
 		update_alru_head(cache, partition_id, next_lru_node);
@@ -213,9 +213,9 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		policy.meta.alru.lru_next = collision_table_entries;
 		next_policy.meta.alru.lru_prev = collision_table_entries;
 
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 				&policy);
-		ocf_metadata_set_cleaning_policy(cache, next_lru_node,
+		ocf_metadata_hash_set_cleaning_policy(cache, next_lru_node,
 						&next_policy);
 	}
 
@@ -228,7 +228,7 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 
 		ENV_BUG_ON(!(prev_lru_node < collision_table_entries));
 
-		ocf_metadata_get_cleaning_policy(cache, prev_lru_node,
+		ocf_metadata_hash_get_cleaning_policy(cache, prev_lru_node,
 				&prev_policy);
 
 		update_alru_tail(cache, partition_id, prev_lru_node);
@@ -236,9 +236,9 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		policy.meta.alru.lru_prev = collision_table_entries;
 		prev_policy.meta.alru.lru_next = collision_table_entries;
 
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 				&policy);
-		ocf_metadata_set_cleaning_policy(cache, prev_lru_node,
+		ocf_metadata_hash_set_cleaning_policy(cache, prev_lru_node,
 						&prev_policy);
 	}
 
@@ -252,9 +252,9 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		ENV_BUG_ON(!(next_lru_node < collision_table_entries));
 		ENV_BUG_ON(!(prev_lru_node < collision_table_entries));
 
-		ocf_metadata_get_cleaning_policy(cache, prev_lru_node,
+		ocf_metadata_hash_get_cleaning_policy(cache, prev_lru_node,
 				&prev_policy);
-		ocf_metadata_get_cleaning_policy(cache, next_lru_node,
+		ocf_metadata_hash_get_cleaning_policy(cache, next_lru_node,
 				&next_policy);
 
 		/* Update prev and next nodes */
@@ -265,11 +265,11 @@ static void remove_alru_list(struct ocf_cache *cache, int partition_id,
 		policy.meta.alru.lru_next = collision_table_entries;
 		policy.meta.alru.lru_prev = collision_table_entries;
 
-		ocf_metadata_set_cleaning_policy(cache, collision_index,
+		ocf_metadata_hash_set_cleaning_policy(cache, collision_index,
 				&policy);
-		ocf_metadata_set_cleaning_policy(cache, prev_lru_node,
+		ocf_metadata_hash_set_cleaning_policy(cache, prev_lru_node,
 				&prev_policy);
-		ocf_metadata_set_cleaning_policy(cache, next_lru_node,
+		ocf_metadata_hash_set_cleaning_policy(cache, next_lru_node,
 				&next_policy);
 	}
 
@@ -288,7 +288,7 @@ static bool is_on_alru_list(struct ocf_cache *cache, int partition_id,
 
 	ENV_BUG_ON(!(collision_index < collision_table_entries));
 
-	ocf_metadata_get_cleaning_policy(cache, collision_index, &policy);
+	ocf_metadata_hash_get_cleaning_policy(cache, collision_index, &policy);
 
 	next_lru_node = policy.meta.alru.lru_next;
 	prev_lru_node = policy.meta.alru.lru_prev;
@@ -307,20 +307,20 @@ void cleaning_policy_alru_init_cache_block(struct ocf_cache *cache,
 {
 	struct cleaning_policy_meta policy;
 
-	ocf_metadata_get_cleaning_policy(cache, cache_line, &policy);
+	ocf_metadata_hash_get_cleaning_policy(cache, cache_line, &policy);
 
 	policy.meta.alru.timestamp = 0;
 	policy.meta.alru.lru_prev = cache->device->collision_table_entries;
 	policy.meta.alru.lru_next = cache->device->collision_table_entries;
 
-	ocf_metadata_set_cleaning_policy(cache, cache_line, &policy);
+	ocf_metadata_hash_set_cleaning_policy(cache, cache_line, &policy);
 }
 
 void cleaning_policy_alru_purge_cache_block(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
 	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache,
 			cache_line);
 
 	env_spinlock_lock(&alru->list_lock[part_id]);
@@ -333,7 +333,7 @@ static void __cleaning_policy_alru_purge_cache_block_any(
 {
 	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
 
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache,
 			cache_line);
 
 	env_spinlock_lock(&alru->list_lock[part_id]);
@@ -367,7 +367,7 @@ void cleaning_policy_alru_set_hot_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {
 	struct alru_context *alru = cache->cleaner.cleaning_policy_context;
-	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache,
+	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache,
 			cache_line);
 	struct ocf_user_part *part = &cache->user_parts[part_id];
 
@@ -380,7 +380,7 @@ void cleaning_policy_alru_set_hot_cache_line(struct ocf_cache *cache,
 
 	env_spinlock_lock(&alru->list_lock[part_id]);
 
-	ocf_metadata_get_cleaning_policy(cache, cache_line, &policy);
+	ocf_metadata_hash_get_cleaning_policy(cache, cache_line, &policy);
 	next_lru_node = policy.meta.alru.lru_next;
 	prev_lru_node = policy.meta.alru.lru_prev;
 
@@ -416,7 +416,7 @@ static void _alru_rebuild(struct ocf_cache *cache)
 	}
 
 	for (cline = 0; cline < cache->device->collision_table_entries; cline++) {
-		ocf_metadata_get_core_and_part_id(cache, cline, &core_id,
+		ocf_metadata_hash_get_core_and_part_id(cache, cline, &core_id,
 				NULL);
 
 		OCF_COND_RESCHED_DEFAULT(step);
@@ -670,7 +670,7 @@ static void get_block_to_flush(struct flush_data* dst,
 	ocf_core_id_t core_id;
 	uint64_t core_line;
 
-	ocf_metadata_get_core_info(cache, cache_line,
+	ocf_metadata_hash_get_core_info(cache, cache_line,
 			&core_id, &core_line);
 
 	dst->cache_line = cache_line;
@@ -686,7 +686,7 @@ static bool more_blocks_to_flush(struct ocf_cache *cache,
 	if (cache_line >= cache->device->collision_table_entries)
 		return false;
 
-	ocf_metadata_get_cleaning_policy(cache, cache_line, &policy);
+	ocf_metadata_hash_get_cleaning_policy(cache, cache_line, &policy);
 
 	if (policy.meta.alru.timestamp >= last_access)
 		return false;
@@ -700,7 +700,7 @@ static bool block_is_busy(struct ocf_cache *cache,
 	ocf_core_id_t core_id;
 	uint64_t core_line;
 
-	ocf_metadata_get_core_info(cache, cache_line,
+	ocf_metadata_hash_get_core_info(cache, cache_line,
 			&core_id, &core_line);
 
 	if (!cache->core[core_id].opened)
@@ -749,7 +749,7 @@ static int get_data_to_flush(struct alru_context *alru)
 				to_flush++;
 			}
 
-			ocf_metadata_get_cleaning_policy(cache, cache_line, &policy);
+			ocf_metadata_hash_get_cleaning_policy(cache, cache_line, &policy);
 			cache_line = policy.meta.alru.lru_prev;
 		}
 

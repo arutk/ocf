@@ -165,8 +165,7 @@ static int _ocf_mngt_get_sectors(ocf_cache_t cache, ocf_core_id_t core_id,
 	for (line = 0, elem = *tbl;
 			line < cache->device->collision_table_entries;
 			line++) {
-		ocf_metadata_get_core_info(cache, line, &i_core_id,
-				&core_line);
+		ocf_metadata_hash_get_core_info(cache, line, &i_core_id, &core_line);
 
 		if (i_core_id == core_id &&
 				metadata_test_valid_any(cache, line) &&
@@ -268,7 +267,7 @@ static int _ocf_mngt_get_flush_containers(ocf_cache_t cache,
 	}
 
 	for (line = 0; line < cache->device->collision_table_entries; line++) {
-		ocf_metadata_get_core_info(cache, line, &core_id, &core_line);
+		ocf_metadata_hash_get_core_info(cache, line, &core_id, &core_line);
 
 		if (metadata_test_valid_any(cache, line) &&
 				metadata_test_dirty(cache, line)) {
