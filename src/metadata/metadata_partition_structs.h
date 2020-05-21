@@ -29,15 +29,29 @@ struct ocf_user_part_config {
 struct ocf_user_part_runtime {
         uint32_t curr_size;
         uint32_t head;
-        struct eviction_policy eviction;
+        struct eviction_policy eviction[OCF_NUM_EVICTION_LISTS];
         struct cleaning_policy cleaning;
 };
 
-struct ocf_user_part {
-        struct ocf_user_part_config *config;
-        struct ocf_user_part_runtime *runtime;
+/* Iterator state, visiting all eviction lists within a partition
+   in round robin order */
+struct ocf_lru_iter {
+	ocf_cache_t cache;
+	ocf_part_id_t part_id;
+	struct ocf_user_part *part;
+	ocf_cache_line_t curr_cline[OCF_NUM_EVICTION_LISTS];
+	bool empty_evps[OCF_NUM_EVICTION_LISTS];
+	uint32_t num_empty_evps;
+	uint32_t evp;
+};
 
-        struct ocf_lst_entry lst_valid;
+struct ocf_user_part {
+	struct ocf_user_part_config *config;
+	struct ocf_user_part_runtime *runtime;
+
+	struct ocf_lru_iter eviction_clean_iter;
+	uint32_t next_eviction_list;
+	struct ocf_lst_entry lst_valid;
 };
 
 

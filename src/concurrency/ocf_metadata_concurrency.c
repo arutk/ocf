@@ -11,9 +11,11 @@ int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock)
 	int err = 0;
 	unsigned i;
 
-	err = env_spinlock_init(&metadata_lock->eviction);
-	if (err)
-		return err;
+	for (i = 0; i < OCF_NUM_EVICTION_LISTS; i++) {
+		err = env_spinlock_init(&metadata_lock->eviction[i]);
+		if (err)
+			goto eviction_err;
+	}
 
 	env_rwlock_init(&metadata_lock->status);
 	err = env_rwsem_init(&metadata_lock->global);
@@ -33,7 +35,12 @@ spinlocks_err:
 		env_spinlock_destroy(&metadata_lock->partition[i]);
 rwsem_err:
 	env_rwlock_destroy(&metadata_lock->status);
-	env_spinlock_destroy(&metadata_lock->eviction);
+
+	i = OCF_NUM_EVICTION_LISTS;
+eviction_err:
+	while (i--)
+		env_spinlock_destroy(&metadata_lock->eviction[i]);
+
 	return err;
 }
 
@@ -41,11 +48,12 @@ void ocf_metadata_concurrency_deinit(struct ocf_metadata_lock *metadata_lock)
 {
 	unsigned i;
 
-	for (i = 0; i < OCF_IO_CLASS_MAX; i++) {
+	for (i = 0; i < OCF_IO_CLASS_MAX; i++)
 		env_spinlock_destroy(&metadata_lock->partition[i]);
-	}
 
-	env_spinlock_destroy(&metadata_lock->eviction);
+	for (i = 0; i < OCF_NUM_EVICTION_LISTS; i++)
+		env_spinlock_destroy(&metadata_lock->eviction[i]);
+
 	env_rwlock_destroy(&metadata_lock->status);
 	env_rwsem_destroy(&metadata_lock->global);
 }
