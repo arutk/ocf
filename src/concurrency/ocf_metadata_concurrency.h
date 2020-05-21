@@ -22,16 +22,44 @@ void ocf_metadata_concurrency_attached_deinit(
 		struct ocf_metadata_lock *metadata_lock);
 
 static inline void ocf_metadata_eviction_lock(
-		struct ocf_metadata_lock *metadata_lock)
+		struct ocf_metadata_lock *metadata_lock, unsigned sublock)
 {
-	env_spinlock_lock(&metadata_lock->eviction);
+	env_spinlock_lock(&metadata_lock->eviction[sublock]);
 }
 
 static inline void ocf_metadata_eviction_unlock(
+		struct ocf_metadata_lock *metadata_lock, unsigned sublock)
+{
+	env_spinlock_unlock(&metadata_lock->eviction[sublock]);
+}
+
+static inline void ocf_metadata_eviction_lock_all(
 		struct ocf_metadata_lock *metadata_lock)
 {
-	env_spinlock_unlock(&metadata_lock->eviction);
+	int i;
+	for (i = 0; i < EVICTION_PARTS; i++)
+		ocf_metadata_eviction_lock(metadata_lock, i);
 }
+
+static inline void ocf_metadata_eviction_unlock_all(
+		struct ocf_metadata_lock *metadata_lock)
+{
+	int i;
+	for (i = 0; i < EVICTION_PARTS; i++)
+		ocf_metadata_eviction_unlock(metadata_lock, i);
+}
+
+#define OCF_METADATA_EVICTION_LOCK(sublock) \
+		ocf_metadata_eviction_lock(&cache->metadata.lock, sublock)
+
+#define OCF_METADATA_EVICTION_UNLOCK(sublock) \
+		ocf_metadata_eviction_unlock(&cache->metadata.lock, sublock)
+
+#define OCF_METADATA_EVICTION_LOCK_ALL() \
+	ocf_metadata_eviction_lock_all(&cache->metadata.lock)
+
+#define OCF_METADATA_EVICTION_UNLOCK_ALL() \
+	ocf_metadata_eviction_unlock_all(&cache->metadata.lock)
 
 static inline void ocf_metadata_partition_lock(
 		struct ocf_metadata_lock *metadata_lock,
@@ -46,12 +74,6 @@ static inline void ocf_metadata_partition_unlock(
 {
 	env_spinlock_unlock(&metadata_lock->partition[part_id]);
 }
-
-#define OCF_METADATA_EVICTION_LOCK() \
-		ocf_metadata_eviction_lock(&cache->metadata.lock)
-
-#define OCF_METADATA_EVICTION_UNLOCK() \
-		ocf_metadata_eviction_unlock(&cache->metadata.lock)
 
 void ocf_metadata_start_exclusive_access(
 		struct ocf_metadata_lock *metadata_lock);

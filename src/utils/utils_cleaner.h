@@ -8,10 +8,13 @@
 
 #include "../ocf_request.h"
 
+struct ocf_cleaner_attribs;
+
 /**
  * @brief Getter for next cache line to be cleaned
  *
  * @param cache[in] Cache instance
+ * @param attribs[in] Cleaning attributes
  * @param getter_context[in] Context for cleaner caller
  * @param item[in] Current iteration item when collection cache lines
  * @param line[out] line to be cleaned
@@ -19,7 +22,8 @@
  * @retval Non-zero Means skip this cache line and do not clean it
  */
 typedef int (*ocf_cleaner_get_item)(struct ocf_cache *cache,
-		void *getter_context, uint32_t item, ocf_cache_line_t *line);
+		void *getter_context, uint32_t item,
+		ocf_cache_line_t *line);
 
 /**
  * @brief Cleaning attributes for clean request
@@ -32,16 +36,16 @@ struct ocf_cleaner_attribs {
 	uint32_t count; /*!< max number of cache lines to be cleaned */
 
 	void *cmpl_context; /*!< Completion context of cleaning requester */
+	uint32_t getter_item;
+		/*!< Additional variable that can be used by cleaner caller
+		 * to iterate over items
+		 */
 	void (*cmpl_fn)(void *priv, int error); /*!< Completion function of requester */
 
 	ocf_cleaner_get_item getter;
 		/*!< Getter for collecting cache lines which will be cleaned */
 	void *getter_context;
 		/*!< Context for getting cache lines */
-	uint32_t getter_item;
-		/*!< Additional variable that can be used by cleaner caller
-		 * to iterate over items
-		 */
 
 	ocf_queue_t io_queue;
 };

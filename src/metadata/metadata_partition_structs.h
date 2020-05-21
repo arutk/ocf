@@ -29,14 +29,28 @@ struct ocf_user_part_config {
 struct ocf_user_part_runtime {
         uint32_t curr_size;
         uint32_t head;
-        struct eviction_policy eviction;
+        struct eviction_policy eviction[EVICTION_PARTS];
         struct cleaning_policy cleaning;
+};
+
+struct ocf_lru_iter_state
+{
+	ocf_cache_t cache;
+	ocf_part_id_t part_id;
+	struct ocf_user_part *part;
+	ocf_cache_line_t curr_cline[EVICTION_PARTS];
+	bool empty_evps[EVICTION_PARTS];
+	ocf_cache_line_t list_terminator;
+	uint32_t empty_evps_no;
+	uint32_t evp;
 };
 
 struct ocf_user_part {
         struct ocf_user_part_config *config;
         struct ocf_user_part_runtime *runtime;
 
+	struct ocf_lru_iter_state eviction_clean_iter;
+	uint32_t next_evp;
         struct ocf_lst_entry lst_valid;
 };
 

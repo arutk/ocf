@@ -14,6 +14,8 @@
 #define OCF_TO_EVICTION_MIN 128UL
 #define OCF_PENDING_EVICTION_LIMIT 512UL
 
+#define EVICTION_PARTS 32 
+
 struct eviction_policy {
 	union {
 		struct lru_eviction_policy lru;
