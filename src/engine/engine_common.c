@@ -97,6 +97,9 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 	uint8_t start_sector = 0;
 	uint8_t end_sector = ocf_line_end_sector(cache);
 	struct ocf_map_info *_entry = &(req->map[entry]);
+	bool valid_all;
+	bool dirty_all;
+	bool dirty_any;
 
 	start_sector = ocf_map_line_start_sector(req, entry);
 	end_sector = ocf_map_line_end_sector(req, entry);
@@ -104,20 +107,20 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 	/* Handle return value */
 	switch (_entry->status) {
 	case LOOKUP_HIT:
-		if (metadata_test_valid_sec(cache, _entry->coll_idx,
-				start_sector, end_sector)) {
+		metadata_test_all_sec(cache, _entry->coll_idx,
+				start_sector, end_sector,
+				NULL, &valid_all, &dirty_any, &dirty_all);
+		if (valid_all)
 			req->info.hit_no++;
-		} else {
+		else
 			req->info.invalid_no++;
-		}
 
 		/* Check request is dirty */
-		if (metadata_test_dirty(cache, _entry->coll_idx)) {
+		if (dirty_any) {
 			req->info.dirty_any++;
 
 			/* Check if cache line is fully dirty */
-			if (metadata_test_dirty_all_sec(cache, _entry->coll_idx,
-				start_sector, end_sector))
+			if (dirty_all)
 				req->info.dirty_all++;
 		}
 

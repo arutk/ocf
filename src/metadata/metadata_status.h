@@ -374,6 +374,26 @@ static inline bool metadata_test_valid_one(struct ocf_cache *cache,
 	return metadata_test_valid_sec(cache, line, pos, pos);
 }
 
+static inline void metadata_test_all_sec(struct ocf_cache *cache,
+		ocf_cache_line_t line, uint8_t start, uint8_t stop,
+		bool *valid, bool *valid_all, bool *dirty, bool *dirty_all)	
+{
+	OCF_METADATA_BITS_LOCK_RD();
+	if (valid)
+		*valid = ocf_metadata_test_valid(cache, line,
+                               start, stop, false);
+	if (valid_all)
+		*valid_all = ocf_metadata_test_valid(cache, line,
+				start, stop, true);
+	if (dirty)
+		*dirty = ocf_metadata_test_dirty(cache, line,
+				start, stop, false);
+	if (dirty_all)
+		*dirty_all = ocf_metadata_test_dirty(cache, line,
+				start, stop, true);
+	OCF_METADATA_BITS_UNLOCK_RD();
+}
+
 /*
  * Marks given cache line's bits as valid
  *
