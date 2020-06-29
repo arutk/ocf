@@ -256,11 +256,10 @@ static inline void *ocf_metadata_raw_wr_access(ocf_cache_t cache,
 static inline void *ocf_metadata_raw_rd_access( ocf_cache_t cache,
 		struct ocf_metadata_raw *raw, uint32_t entry)
 {
-	#define __RAW_RAM_ADDR(raw, line) \
-	(raw->mem_pool + (((uint64_t)raw->entry_size * (line))))
-
-	return __RAW_RAM_ADDR( raw, entry );
-	//return raw->iface->access(cache, raw, entry);
+	if (raw->raw_type != metadata_raw_type_dynamic)
+		return raw->mem_pool + ((uint64_t)raw->entry_size * entry);
+	else
+		return raw->iface->access(cache, raw, entry);
 }
 
 /**

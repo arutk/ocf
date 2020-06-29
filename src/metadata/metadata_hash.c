@@ -410,9 +410,9 @@ static struct ocf_metadata_hash_ctrl *ocf_metadata_hash_ctrl_init(
 			raw->raw_type = metadata_raw_type_volatile;
 		} else if (i == metadata_segment_core_uuid) {
 			raw->raw_type = metadata_raw_type_ram;
-		}/* else if (i == metadata_segment_core_uuid) {
+		} else if (i == metadata_segment_core_uuid) {
 			raw->raw_type = metadata_raw_type_dynamic;
-		}*/
+		}
 
 		/* Entry size configuration */
 		raw->entry_size
