@@ -362,6 +362,7 @@ static void evp_lru_clean_end(void *private_data, int error)
 	struct ocf_lru_iter_state *lru_iter = private_data;
 
 	lru_iter_finish(lru_iter);
+	env_atomic_set(&lru_iter->part->cleaning, 0);
 	ocf_refcnt_dec(&lru_iter->cache->refcnt.cleaning[lru_iter->part_id]);
 }
 
@@ -411,17 +412,15 @@ static void evp_lru_clean(ocf_cache_t cache, ocf_queue_t io_queue,
 
 		.io_queue = io_queue
 	};
-	int cnt;
 
 	if (ocf_mngt_cache_is_locked(cache))
 		return;
 
-	cnt = ocf_refcnt_inc(counter);
-	if (!cnt) {
+	if (!ocf_refcnt_inc(counter)) {
 		/* cleaner disabled by management operation */
 		return;
 	}
-	if (cnt > 1) {
+	if (env_atomic_cmpxchg(&part->cleaning, 1, 0) == 1) {
 		/* cleaning already running for this partition */
 		ocf_refcnt_dec(counter);
 		return;

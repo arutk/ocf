@@ -129,12 +129,22 @@ void cache_mngt_core_remove_from_cache(ocf_core_t core)
 void ocf_mngt_cache_put(ocf_cache_t cache)
 {
 	ocf_ctx_t ctx;
+	unsigned i;
 
 	OCF_CHECK_NULL(cache);
 
-	if (ocf_refcnt_dec(&cache->refcnt.cache) == 0) {
+	ocf_refcnt_dec(&cache->refcnt.cache);
+
+	if (ocf_refcnt_is_zero(&cache->refcnt.cache)) {
 		ctx = cache->owner;
 		ocf_metadata_deinit(cache);
+
+		ocf_refcnt_deinit(&cache->refcnt.cache);
+		ocf_refcnt_deinit(&cache->refcnt.dirty);
+		ocf_refcnt_deinit(&cache->refcnt.metadata);
+		for (i = 0; i < OCF_IO_CLASS_MAX; i++)
+			ocf_refcnt_deinit(&cache->refcnt.cleaning[i]);
+
 		env_vfree(cache);
 		ocf_ctx_put(ctx);
 	}
@@ -337,7 +347,7 @@ bool ocf_mngt_cache_is_locked(ocf_cache_t cache)
 /* if cache is either fully initialized or during recovery */
 static bool _ocf_mngt_cache_try_get(ocf_cache_t cache)
 {
-	return !!ocf_refcnt_inc(&cache->refcnt.cache);
+	return ocf_refcnt_inc(&cache->refcnt.cache);
 }
 
 int ocf_mngt_cache_get(ocf_cache_t cache)

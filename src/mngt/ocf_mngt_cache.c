@@ -546,6 +546,7 @@ static int _ocf_mngt_init_new_cache(struct ocf_cache_mngt_init_params *params)
 {
 	ocf_cache_t cache = env_vzalloc(sizeof(*cache));
 	int result;
+	unsigned i;
 
 	if (!cache)
 		return -OCF_ERR_NO_MEM;
@@ -554,6 +555,15 @@ static int _ocf_mngt_init_new_cache(struct ocf_cache_mngt_init_params *params)
 		result = -OCF_ERR_NO_MEM;
 		goto alloc_err;
 	}
+
+
+        ENV_BUG_ON(ocf_refcnt_init(&cache->refcnt.cache, "cache", strlen("cache")));
+        ENV_BUG_ON(ocf_refcnt_init(&cache->refcnt.dirty, "dirty", strlen("dirty")));
+        ENV_BUG_ON(ocf_refcnt_init(&cache->refcnt.metadata, "metadata", strlen("metadata")));
+        for (i = 0; i < OCF_IO_CLASS_MAX; i++)
+                ENV_BUG_ON(ocf_refcnt_init(&cache->refcnt.cleaning[i], "cleaning",
+				strlen("cleaning")));
+
 
 	/* Lock cache during setup - this trylock should always succeed */
 	ENV_BUG_ON(ocf_mngt_cache_trylock(cache));

@@ -89,7 +89,7 @@ int ocf_volume_init(ocf_volume_t volume, ocf_volume_type_t type,
 	if (!volume->priv)
 		return -OCF_ERR_NO_MEM;
 
-	ocf_refcnt_init(&volume->refcnt);
+	ocf_refcnt_init(&volume->refcnt, "volume", strlen("volume"));
 	ocf_refcnt_freeze(&volume->refcnt);
 
 	if (!uuid) {
@@ -132,6 +132,7 @@ void ocf_volume_deinit(ocf_volume_t volume)
 	OCF_CHECK_NULL(volume);
 
 	env_free(volume->priv);
+	ocf_refcnt_deinit(&volume->refcnt);
 
 	if (volume->uuid_copy && volume->uuid.data) {
 		env_vfree(volume->uuid.data);

@@ -305,7 +305,7 @@ void ocf_req_put(struct ocf_request *req)
 
 int ocf_req_set_dirty(struct ocf_request *req)
 {
-	req->dirty = !!ocf_refcnt_inc(&req->cache->refcnt.dirty);
+	req->dirty = ocf_refcnt_inc(&req->cache->refcnt.dirty);
 	return req->dirty ? 0 : -OCF_ERR_AGAIN;
 }
 
