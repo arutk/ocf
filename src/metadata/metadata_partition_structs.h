@@ -69,6 +69,7 @@ struct ocf_lru_iter
 struct ocf_part_cleaning_ctx {
 	ocf_cache_t cache;
 	struct ocf_refcnt counter;
+	env_atomic a;
 	ocf_cache_line_t cline[OCF_EVICTION_CLEAN_SIZE];
 };
 

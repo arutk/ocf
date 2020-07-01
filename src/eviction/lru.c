@@ -513,6 +513,7 @@ static void evp_lru_clean_end(void *private_data, int error)
 					.cache_line, ctx->cline[i]);
 	}
 
+	env_atomic_set(&ctx->a, 0);
 	ocf_refcnt_dec(&ctx->counter);
 }
 
@@ -552,19 +553,18 @@ void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
 	ocf_cache_line_t *cline = part->cleaning.cline;
 	struct ocf_lru_iter iter;
 	unsigned evp;
-	int cnt;
 	unsigned i;
 	unsigned lock_idx;
 
 	if (ocf_mngt_cache_is_locked(cache))
 		return;
-	cnt = ocf_refcnt_inc(&ctx->counter);
-	if (!cnt) {
+
+	if (!ocf_refcnt_inc(&ctx->counter)) {
 		/* cleaner disabled by management operation */
 		return;
 	}
 
-	if (cnt > 1) {
+	if (env_atomic_cmpxchg(&ctx->a, 1, 0) == 1) {
 		/* cleaning already running for this partition */
 		ocf_refcnt_dec(&ctx->counter);
 		return;
