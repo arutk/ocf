@@ -10,7 +10,8 @@
 #define OCF_METADATA_RD 0
 #define OCF_METADATA_WR 1
 
-int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock);
+int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock,
+		unsigned num_evps);
 
 void ocf_metadata_concurrency_deinit(struct ocf_metadata_lock *metadata_lock);
 
@@ -37,7 +38,7 @@ static inline void ocf_metadata_eviction_lock_all(
 		struct ocf_metadata_lock *metadata_lock)
 {
 	int i;
-	for (i = 0; i < EVICTION_PARTS; i++)
+	for (i = 0; i < metadata_lock->num_evps; i++)
 		ocf_metadata_eviction_lock(metadata_lock, i);
 }
 
@@ -45,15 +46,20 @@ static inline void ocf_metadata_eviction_unlock_all(
 		struct ocf_metadata_lock *metadata_lock)
 {
 	int i;
-	for (i = 0; i < EVICTION_PARTS; i++)
+	for (i = 0; i < metadata_lock->num_evps; i++)
 		ocf_metadata_eviction_unlock(metadata_lock, i);
 }
 
-#define OCF_METADATA_EVICTION_LOCK(sublock) \
-		ocf_metadata_eviction_lock(&cache->metadata.lock, sublock)
+#define OCF_METADATA_EVICTION_NUM_LOCKS \
+		(cache->num_evps)
 
-#define OCF_METADATA_EVICTION_UNLOCK(sublock) \
-		ocf_metadata_eviction_unlock(&cache->metadata.lock, sublock)
+#define OCF_METADATA_EVICTION_LOCK(cline) \
+		ocf_metadata_eviction_lock(&cache->metadata.lock, \
+				cline % OCF_METADATA_EVICTION_NUM_LOCKS)
+
+#define OCF_METADATA_EVICTION_UNLOCK(cline) \
+		ocf_metadata_eviction_unlock(&cache->metadata.lock, \
+				cline % OCF_METADATA_EVICTION_NUM_LOCKS)
 
 #define OCF_METADATA_EVICTION_LOCK_ALL() \
 	ocf_metadata_eviction_lock_all(&cache->metadata.lock)

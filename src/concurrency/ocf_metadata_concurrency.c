@@ -6,12 +6,15 @@
 #include "ocf_metadata_concurrency.h"
 #include "../metadata/metadata_misc.h"
 
-int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock)
+int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock,
+	unsigned num_evps)
 {
 	int err = 0;
 	unsigned i;
 
-	for (i = 0; i < EVICTION_PARTS; i++) {
+	metadata_lock->num_evps = num_evps;
+
+	for (i = 0; i < num_evps; i++) {
 		err = env_spinlock_init(&metadata_lock->eviction[i]);
 		if (err)
 			goto eviction_err;
@@ -37,7 +40,7 @@ rwsem_err:
 	env_rwlock_destroy(&metadata_lock->status);
 	env_spinlock_destroy(&metadata_lock->eviction[i]);
 
-	i = EVICTION_PARTS;
+	i = num_evps;
 eviction_err:
 	while (i--)
 		env_spinlock_destroy(&metadata_lock->eviction[i]);
@@ -52,7 +55,7 @@ void ocf_metadata_concurrency_deinit(struct ocf_metadata_lock *metadata_lock)
 	for (i = 0; i < OCF_IO_CLASS_MAX; i++)
 		env_spinlock_destroy(&metadata_lock->partition[i]);
 
-	for (i = 0; i < EVICTION_PARTS; i++)
+	for (i = 0; i < metadata_lock->num_evps; i++)
 		env_spinlock_destroy(&metadata_lock->eviction[i]);
 
 	env_rwlock_destroy(&metadata_lock->status);

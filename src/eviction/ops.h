@@ -36,12 +36,11 @@ static inline void ocf_eviction_purge_cache_line(
 	ENV_BUG_ON(type >= ocf_eviction_max);
 
 	if (likely(evict_policy_ops[type].rm_cline)) {
-		OCF_METADATA_EVICTION_LOCK(line % EVICTION_PARTS);
+		OCF_METADATA_EVICTION_LOCK(line);
 		evict_policy_ops[type].rm_cline(cache, line);
-		OCF_METADATA_EVICTION_UNLOCK(line % EVICTION_PARTS);
+		OCF_METADATA_EVICTION_UNLOCK(line);
 	}
 }
-
 
 static inline bool ocf_eviction_can_evict(struct ocf_cache *cache)
 {
@@ -83,14 +82,14 @@ static inline void ocf_eviction_set_hot_cache_line(
 	ENV_BUG_ON(type >= ocf_eviction_max);
 
 	if (likely(evict_policy_ops[type].hot_cline)) {
-		OCF_METADATA_EVICTION_LOCK(line % EVICTION_PARTS);
+		OCF_METADATA_EVICTION_LOCK(line);
 		evict_policy_ops[type].hot_cline(cache, line);
-		OCF_METADATA_EVICTION_UNLOCK(line % EVICTION_PARTS);
+		OCF_METADATA_EVICTION_UNLOCK(line);
 	}
 }
 
 static inline void ocf_eviction_initialize(struct ocf_cache *cache,
-		ocf_part_id_t part_id)
+		ocf_part_id_t part_id, unsigned num_evps)
 {
 	uint8_t type = cache->conf_meta->eviction_policy_type;
 
@@ -98,7 +97,8 @@ static inline void ocf_eviction_initialize(struct ocf_cache *cache,
 
 	if (likely(evict_policy_ops[type].init_evp)) {
 		OCF_METADATA_EVICTION_LOCK_ALL();
-		evict_policy_ops[type].init_evp(cache, part_id);
+		evict_policy_ops[type].init_evp(cache, part_id,
+				num_evps);
 		OCF_METADATA_EVICTION_UNLOCK_ALL();
 	}
 }

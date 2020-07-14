@@ -39,7 +39,10 @@ int ocf_metadata_init(struct ocf_cache *cache,
 		return ret;
 	}
 
-	ret = ocf_metadata_concurrency_init(&cache->metadata.lock);
+	cache->num_evps = min(num_online_cpus() / 2, EVICTION_MAX_PARTS);
+
+	ret = ocf_metadata_concurrency_init(&cache->metadata.lock,
+			cache->num_evps);
 	if (ret) {
 		if (cache->metadata.iface.deinit)
 			cache->metadata.iface.deinit(cache);

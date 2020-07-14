@@ -198,7 +198,7 @@ static void __init_partitions_attached(ocf_cache_t cache)
 				cache->device->collision_table_entries;
 		cache->user_parts[part_id].runtime->curr_size = 0;
 
-		ocf_eviction_initialize(cache, part_id);
+		ocf_eviction_initialize(cache, part_id, cache->num_evps);
 	}
 }
 

@@ -107,6 +107,7 @@ struct ocf_cache {
 
 	struct ocf_lst lst_part;
 	struct ocf_user_part user_parts[OCF_IO_CLASS_MAX + 1];
+	unsigned num_evps;
 
 	struct ocf_metadata metadata;
 
