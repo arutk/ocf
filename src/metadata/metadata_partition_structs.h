@@ -40,7 +40,7 @@ struct ocf_lru_iter_state
 	struct ocf_user_part *part;
 	ocf_cache_line_t curr_cline[EVICTION_MAX_PARTS];
 	bool empty_evps[EVICTION_MAX_PARTS];
-	ocf_cache_line_t list_terminator;
+	ocf_cache_line_t end_marker;
 	uint32_t empty_evps_no;
 	uint32_t evp;
 	uint32_t num_evps;

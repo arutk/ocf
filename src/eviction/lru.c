@@ -17,216 +17,178 @@
 
 /* -- Start of LRU functions --*/
 
-/* Returns 1 if the given collision_index is the _head_ of
- * the LRU list, 0 otherwise.
- */
-/* static inline int is_lru_head(unsigned collision_index) {
- *	return collision_index == lru_list.lru_head;
- * }
- */
-
-#define is_lru_head(x) (x == collision_table_entries)
-#define is_lru_tail(x) (x == collision_table_entries)
-
 /* Sets the given collision_index as the new _head_ of the LRU list. */
-static inline void update_lru_head(ocf_cache_t cache, int partition_id,
-		uint32_t ev_part, unsigned int collision_index,
-		int cline_dirty)
+static inline void update_lru_head(struct ocf_lru_list *list,
+		unsigned int collision_index)
 {
-	struct ocf_user_part *part = &cache->user_parts[partition_id];
-
-
-	if (cline_dirty)
-		part->runtime->eviction[ev_part].policy.lru.dirty_head = collision_index;
-	else
-		part->runtime->eviction[ev_part].policy.lru.clean_head = collision_index;
+	list->head = collision_index;
 }
 
 /* Sets the given collision_index as the new _tail_ of the LRU list. */
-static inline void update_lru_tail(ocf_cache_t cache, int partition_id,
-		uint32_t ev_part, unsigned int collision_index,
-		int cline_dirty)
+static inline void update_lru_tail(struct ocf_lru_list *list,
+		unsigned int collision_index)
 {
-	struct ocf_user_part *part = &cache->user_parts[partition_id];
-
-	if (cline_dirty)
-		part->runtime->eviction[ev_part].policy.lru.dirty_tail = collision_index;
-	else
-		part->runtime->eviction[ev_part].policy.lru.clean_tail = collision_index;
+	list->tail = collision_index;
 }
 
 /* Sets the given collision_index as the new _head_ and _tail_ of
  * the LRU list.
  */
-static inline void update_lru_head_tail(ocf_cache_t cache, int partition_id,
-		uint32_t ev_part, unsigned int collision_index,
-		int cline_dirty)
+static inline void update_lru_head_tail(struct ocf_lru_list *list,
+		unsigned int collision_index)
 {
-	update_lru_head(cache, partition_id, ev_part, collision_index, cline_dirty);
-	update_lru_tail(cache, partition_id, ev_part, collision_index, cline_dirty);
+	update_lru_head(list, collision_index);
+	update_lru_tail(list, collision_index);
 }
 
 /* Adds the given collision_index to the _head_ of the LRU list */
-static void add_lru_head(ocf_cache_t cache, int partition_id,
-		unsigned int collision_index, int cline_dirty)
+static void add_lru_head(ocf_cache_t cache,
+		struct ocf_lru_list *list,
+		unsigned int collision_index,
+		unsigned int end_marker)
+
 {
+	struct lru_eviction_policy_meta *node;
 	unsigned int curr_head_index;
-	unsigned int collision_table_entries =
-			cache->device->collision_table_entries;
-	struct ocf_user_part *part = &cache->user_parts[partition_id];
-	union eviction_policy_meta *eviction;
-	int ev_part = (collision_index % cache->num_evps);
 
-	ENV_BUG_ON(!(collision_index < collision_table_entries));
+	ENV_BUG_ON(collision_index >= end_marker);
 
-	eviction = ocf_metadata_hash_get_eviction_policy(cache, collision_index);
+	node = &ocf_metadata_hash_get_eviction_policy(cache, collision_index)
+			->lru;
 
 	/* First node to be added/ */
-	if ((cline_dirty && !part->runtime->eviction[ev_part].policy.lru.has_dirty_nodes) ||
-	    (!cline_dirty && !part->runtime->eviction[ev_part].policy.lru.has_clean_nodes)) {
-		update_lru_head_tail(cache, partition_id, ev_part, collision_index, cline_dirty);
+	if (!list->num_nodes)  {
+		update_lru_head_tail(list, collision_index);
 
-		eviction->lru.next = collision_table_entries;
-		eviction->lru.prev = collision_table_entries;
+		node->next = end_marker;
+		node->prev = end_marker;
 
-		if (cline_dirty)
-			part->runtime->eviction[ev_part].policy.lru.has_dirty_nodes = 1;
-		else
-			part->runtime->eviction[ev_part].policy.lru.has_clean_nodes = 1;
-
+		list->num_nodes = 1;
 	} else {
-		union eviction_policy_meta *eviction_curr;
+		struct lru_eviction_policy_meta *head;
 
 		/* Not the first node to be added. */
-		curr_head_index = cline_dirty ?
-				part->runtime->eviction[ev_part].policy.lru.dirty_head :
-				part->runtime->eviction[ev_part].policy.lru.clean_head;
+		curr_head_index = list->head;
 
-		ENV_BUG_ON(!(curr_head_index < collision_table_entries));
+		ENV_BUG_ON(curr_head_index == end_marker);
 
-		eviction_curr =  ocf_metadata_hash_get_eviction_policy(cache, curr_head_index);
+		head = &ocf_metadata_hash_get_eviction_policy(cache,
+				curr_head_index)->lru;
 
-		eviction->lru.next = curr_head_index;
-		eviction->lru.prev = collision_table_entries;
-		eviction_curr->lru.prev = collision_index;
+		node->next = curr_head_index;
+		node->prev = end_marker;
+		head->prev = collision_index;
 
-		update_lru_head(cache, partition_id, ev_part, collision_index, cline_dirty);
+		update_lru_head(list, collision_index);
+
+		++list->num_nodes;
 	}
 }
 
 /* Deletes the node with the given collision_index from the lru list */
-static void remove_lru_list(ocf_cache_t cache, int partition_id,
-		unsigned int collision_index, int cline_dirty)
+static void remove_lru_list(ocf_cache_t cache,
+		struct ocf_lru_list *list,
+		unsigned int collision_index,
+		unsigned int end_marker)
 {
-	int is_clean_head = 0, is_clean_tail = 0, is_dirty_head = 0, is_dirty_tail = 0;
+	int is_head = 0, is_tail = 0;
 	uint32_t prev_lru_node, next_lru_node;
-	uint32_t collision_table_entries = cache->device->collision_table_entries;
-	struct ocf_user_part *part = &cache->user_parts[partition_id];
-	union eviction_policy_meta *eviction;
-	int ev_part = (collision_index % cache->num_evps);
+	struct lru_eviction_policy_meta *node;
 
-	ENV_BUG_ON(!(collision_index < collision_table_entries));
+	ENV_BUG_ON(collision_index >= end_marker);
 
-	eviction =  ocf_metadata_hash_get_eviction_policy(cache, collision_index);
+	node = &ocf_metadata_hash_get_eviction_policy(cache, collision_index)->lru;
 
-	/* Find out if this node is LRU _head_ or LRU _tail_ */
-	if (part->runtime->eviction[ev_part].policy.lru.clean_head == collision_index)
-		is_clean_head = 1;
-	if (part->runtime->eviction[ev_part].policy.lru.dirty_head == collision_index)
-		is_dirty_head = 1;
-	if (part->runtime->eviction[ev_part].policy.lru.clean_tail == collision_index)
-		is_clean_tail = 1;
-	if (part->runtime->eviction[ev_part].policy.lru.dirty_tail == collision_index)
-		is_dirty_tail = 1;
-	ENV_BUG_ON((is_clean_tail || is_clean_head) && (is_dirty_tail || is_dirty_head));
+	is_head = (list->head == collision_index);
+	is_tail = (list->tail == collision_index);
 
 	/* Set prev and next (even if not existent) */
-	next_lru_node = eviction->lru.next;
-	prev_lru_node = eviction->lru.prev;
+	next_lru_node = node->next;
+	prev_lru_node = node->prev;
 
 	/* Case 1: If we are head AND tail, there is only one node.
 	 * So unlink node and set that there is no node left in the list.
 	 */
-	if ((is_clean_head && is_clean_tail) || (is_dirty_head && is_dirty_tail)) {
-		eviction->lru.next = collision_table_entries;
-		eviction->lru.prev = collision_table_entries;
+	if (is_head && is_tail) {
+		node->next = end_marker;
+		node->prev = end_marker;
 
-		update_lru_head_tail(cache, partition_id, ev_part, collision_table_entries, cline_dirty);
-
-		if (cline_dirty)
-			part->runtime->eviction[ev_part].policy.lru.has_dirty_nodes = 0;
-		else
-			 part->runtime->eviction[ev_part].policy.lru.has_clean_nodes = 0;
-
-		update_lru_head_tail(cache, partition_id, ev_part,
-				collision_table_entries, cline_dirty);
+		update_lru_head_tail(list, end_marker);
 	}
 
 	/* Case 2: else if this collision_index is LRU head, but not tail,
 	 * update head and return
 	 */
-	else if ((!is_clean_tail && is_clean_head) || (!is_dirty_tail && is_dirty_head)) {
-		union eviction_policy_meta *eviction_next;
+	else if (is_head) {
+		struct lru_eviction_policy_meta *next_node;
 
-		ENV_BUG_ON(!(next_lru_node < collision_table_entries));
+		ENV_BUG_ON(next_lru_node >= end_marker);
 
-		eviction_next =  ocf_metadata_hash_get_eviction_policy(cache, next_lru_node);
+		next_node = &ocf_metadata_hash_get_eviction_policy(cache,
+				next_lru_node)->lru;
 
-		update_lru_head(cache, partition_id, ev_part, next_lru_node, cline_dirty);
+		update_lru_head(list, next_lru_node);
 
-		eviction->lru.next = collision_table_entries;
-		eviction_next->lru.prev = collision_table_entries;
+		node->next = end_marker;
+		next_node->prev = end_marker;
 	}
 
 	/* Case 3: else if this collision_index is LRU tail, but not head,
 	 * update tail and return
 	 */
-	else if ((is_clean_tail && !is_clean_head) || (is_dirty_tail && !is_dirty_head)) {
-		union eviction_policy_meta *eviction_prev;
+	else if (is_tail) {
+		struct lru_eviction_policy_meta *prev_node;
 
-		ENV_BUG_ON(!(prev_lru_node < collision_table_entries));
+		ENV_BUG_ON(prev_lru_node >= end_marker);
 
-		update_lru_tail(cache, partition_id, ev_part, prev_lru_node, cline_dirty);
+		update_lru_tail(list, prev_lru_node);
 
-		eviction_prev =  ocf_metadata_hash_get_eviction_policy(cache, prev_lru_node);
+		prev_node = &ocf_metadata_hash_get_eviction_policy(cache,
+				prev_lru_node)->lru;
 
-		eviction->lru.prev = collision_table_entries;
-		eviction_prev->lru.next = collision_table_entries;
+		node->prev = end_marker;
+		prev_node->next = end_marker;
 	}
 
 	/* Case 4: else this collision_index is a middle node. There is no
 	 * change to the head and the tail pointers.
 	 */
 	else {
-		union eviction_policy_meta *eviction_prev;
-		union eviction_policy_meta *eviction_next;
+		struct lru_eviction_policy_meta *prev_node;
+		struct lru_eviction_policy_meta *next_node;
 
-		ENV_BUG_ON(!(next_lru_node < collision_table_entries));
-		ENV_BUG_ON(!(prev_lru_node < collision_table_entries));
+		ENV_BUG_ON(next_lru_node >= end_marker);
+		ENV_BUG_ON(prev_lru_node >= end_marker);
 
-		eviction_prev =  ocf_metadata_hash_get_eviction_policy(cache, prev_lru_node);
-		eviction_next =  ocf_metadata_hash_get_eviction_policy(cache, next_lru_node);
+		prev_node = &ocf_metadata_hash_get_eviction_policy(cache,
+				prev_lru_node)->lru;
+		next_node = &ocf_metadata_hash_get_eviction_policy(cache,
+				next_lru_node)->lru;
 
 		/* Update prev and next nodes */
-		eviction_prev->lru.next = eviction->lru.next;
-		eviction_next->lru.prev = eviction->lru.prev;
+		prev_node->next = node->next;
+		next_node->prev = node->prev;
 
 		/* Update the given node */
-		eviction->lru.next = collision_table_entries;
-		eviction->lru.prev = collision_table_entries;
+		node->next = end_marker;
+		node->prev = end_marker;
 	}
+
+	--list->num_nodes;
 }
 
 /*-- End of LRU functions*/
 
 void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
-	union eviction_policy_meta *eviction;
+	struct lru_eviction_policy_meta *node;
+	const uint32_t end_marker =
+			cache->device->collision_table_entries;
 
-	eviction =  ocf_metadata_hash_get_eviction_policy(cache, cline);
+	node = &ocf_metadata_hash_get_eviction_policy(cache, cline)->lru;
 
-	eviction->lru.prev = cache->device->collision_table_entries;
-	eviction->lru.next = cache->device->collision_table_entries;
+	node->prev = end_marker;
+	node->next = end_marker;
 }
 
 
@@ -234,8 +196,17 @@ void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 void evp_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache, cline);
+	struct ocf_user_part *part = &cache->user_parts[part_id];
+	int ev_part = (cline % cache->num_evps);
+	struct ocf_lru_list *list;
+	const unsigned int end_marker =
+			cache->device->collision_table_entries;
 
-	remove_lru_list(cache, part_id, cline, metadata_test_dirty(cache, cline));
+	list = metadata_test_dirty(cache, cline) ? 
+		&part->runtime->eviction[ev_part].policy.lru.dirty :
+		&part->runtime->eviction[ev_part].policy.lru.clean;
+
+	remove_lru_list(cache, list, cline, end_marker);
 }
 
 static inline void lru_iter_init(ocf_cache_t cache, ocf_part_id_t part_id,
@@ -248,14 +219,14 @@ static inline void lru_iter_init(ocf_cache_t cache, ocf_part_id_t part_id,
 	state->part_id = part_id;
 	state->part = part;
 	state->evp = part->next_evp;
-	state->list_terminator = cache->device->collision_table_entries;
+	state->end_marker = cache->device->collision_table_entries;
 	state->empty_evps_no = 0;
 	state->num_evps = cache->num_evps;
 
 	for (i = 0; i < cache->num_evps; i++) {
 		state->curr_cline[i] = clean ? 
-			part->runtime->eviction[i].policy.lru.clean_tail : 
-			part->runtime->eviction[i].policy.lru.dirty_tail;
+			part->runtime->eviction[i].policy.lru.clean.tail : 
+			part->runtime->eviction[i].policy.lru.dirty.tail;
 		state->empty_evps[i] = false;
 	}
 }
@@ -280,30 +251,30 @@ static inline uint32_t _lru_next_evp(struct ocf_lru_iter_state *state)
 
 static inline ocf_cache_line_t lru_iter_next(struct ocf_lru_iter_state *state)
 {
-	union eviction_policy_meta *eviction;
+	struct lru_eviction_policy_meta *node;
 	uint32_t curr_evp;
 	ocf_cache_line_t  ret;
 
 	curr_evp = _lru_next_evp(state);
 
-	ENV_BUG_ON(state->curr_cline[curr_evp] > state->list_terminator);
+	ENV_BUG_ON(state->curr_cline[curr_evp] > state->end_marker);
 
 	while (true) {
-		if (state->curr_cline[curr_evp] == state->list_terminator) {
+		if (state->curr_cline[curr_evp] == state->end_marker) {
 			if (!state->empty_evps[curr_evp]) {
 				state->empty_evps[curr_evp] = true;
 				state->empty_evps_no++;
 			}
 			if (state->empty_evps_no == state->num_evps)
-				return state->list_terminator;
+				return state->end_marker;
 			curr_evp = _lru_next_evp(state);
 			continue;
 		}
 
-		eviction = ocf_metadata_hash_get_eviction_policy(state->cache,
-				state->curr_cline[curr_evp]);
+		node = &ocf_metadata_hash_get_eviction_policy(state->cache,
+				state->curr_cline[curr_evp])->lru;
 		ret = state->curr_cline[curr_evp];
-		state->curr_cline[curr_evp] = eviction->lru.prev;
+		state->curr_cline[curr_evp] = node->prev;
 		break;
 	}
 
@@ -437,7 +408,7 @@ static bool dirty_pages_present(ocf_cache_t cache, ocf_part_id_t part_id)
 
 
 	for (i = 0; i < cache->num_evps; i++) {
-		if (part->runtime->eviction[i].policy.lru.dirty_tail !=
+		if (part->runtime->eviction[i].policy.lru.dirty.tail !=
 				cache->device->collision_table_entries) {
 			return true;
 		}
@@ -508,67 +479,90 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	ocf_part_id_t part_id = ocf_metadata_hash_get_partition_id(cache, cline);
 	struct ocf_user_part *part = &cache->user_parts[part_id];
 	int ev_part = (cline % cache->num_evps);
-	uint32_t prev_lru_node, next_lru_node;
-	uint32_t collision_table_entries = cache->device->collision_table_entries;
-	union eviction_policy_meta *eviction;
+	uint32_t end_marker = cache->device->collision_table_entries;
+	struct lru_eviction_policy_meta *node;
 
 	int cline_dirty;
+	struct ocf_lru_list *list;
 
-	eviction = ocf_metadata_hash_get_eviction_policy(cache, cline);
-
-	next_lru_node = eviction->lru.next;
-	prev_lru_node = eviction->lru.prev;
-
+	node = &ocf_metadata_hash_get_eviction_policy(cache, cline)->lru;
 	cline_dirty = metadata_test_dirty(cache, cline);
+	list = cline_dirty ? 
+		&part->runtime->eviction[ev_part].policy.lru.dirty :
+		&part->runtime->eviction[ev_part].policy.lru.clean;
 
-	if ((next_lru_node != collision_table_entries) ||
-	    (prev_lru_node != collision_table_entries) ||
-	    ((part->runtime->eviction[ev_part].policy.lru.clean_head == cline) &&
-	     (part->runtime->eviction[ev_part].policy.lru.clean_tail == cline)) ||
-	    ((part->runtime->eviction[ev_part].policy.lru.dirty_head == cline) &&
-	     (part->runtime->eviction[ev_part].policy.lru.dirty_tail == cline))) {
-		remove_lru_list(cache, part_id, cline, cline_dirty);
+	if (node->next != end_marker ||
+			node->prev != end_marker ||
+			list->head == cline || list->tail == cline) {
+		remove_lru_list(cache, list, cline, end_marker);
 	}
 
 	/* Update LRU */
-	add_lru_head(cache, part_id, cline, cline_dirty);
+	add_lru_head(cache, list, cline, end_marker);
+}
+
+static inline void _lru_init(struct ocf_lru_list *list, unsigned end_marker)
+{
+	list->num_nodes = 0;
+	list->head = end_marker;
+	list->tail = end_marker;
 }
 
 void evp_lru_init_evp(ocf_cache_t cache, ocf_part_id_t part_id,
 		unsigned num_instances)
 {
-	unsigned int collision_table_entries =
+	unsigned int end_marker =
 			cache->device->collision_table_entries;
 	struct ocf_user_part *part = &cache->user_parts[part_id];
-        struct eviction_policy *eviction;
+	struct ocf_lru_list *clean_list; 
+	struct ocf_lru_list *dirty_list;
+
 	unsigned i;
 
 	for (i = 0; i < cache->num_evps; i++) {
-		eviction = &part->runtime->eviction[i];
-		eviction->policy.lru.has_clean_nodes = 0;
-		eviction->policy.lru.has_dirty_nodes = 0;
-		eviction->policy.lru.clean_head = collision_table_entries;
-		eviction->policy.lru.clean_tail = collision_table_entries;
-		eviction->policy.lru.dirty_head = collision_table_entries;
-		eviction->policy.lru.dirty_tail = collision_table_entries;
+		clean_list = &part->runtime->eviction[i].policy.lru.clean;
+		dirty_list = &part->runtime->eviction[i].policy.lru.dirty;
+
+		_lru_init(clean_list, end_marker);
+		_lru_init(dirty_list, end_marker);
 	}
 }
 
 void evp_lru_clean_cline(ocf_cache_t cache, ocf_part_id_t part_id,
 		uint32_t cline)
 {
+	struct ocf_user_part *part = &cache->user_parts[part_id];
+	const unsigned int end_marker =
+			cache->device->collision_table_entries;
+	int ev_part = (cline % cache->num_evps);
+	struct ocf_lru_list *clean_list;
+	struct ocf_lru_list *dirty_list;
+
+	clean_list = &part->runtime->eviction[ev_part].policy.lru.clean;
+	dirty_list = &part->runtime->eviction[ev_part].policy.lru.dirty;
+
 	OCF_METADATA_EVICTION_LOCK(cline);
-	remove_lru_list(cache, part_id, cline, 1);
-	add_lru_head(cache, part_id, cline, 0);
+	remove_lru_list(cache, dirty_list, cline, end_marker);
+	add_lru_head(cache, clean_list, cline, end_marker);
 	OCF_METADATA_EVICTION_UNLOCK(cline);
 }
 
 void evp_lru_dirty_cline(ocf_cache_t cache, ocf_part_id_t part_id,
 		uint32_t cline)
 {
+	const unsigned int end_marker =
+			cache->device->collision_table_entries;
+	struct ocf_user_part *part = &cache->user_parts[part_id];
+	int ev_part = (cline % cache->num_evps);
+	struct ocf_lru_list *clean_list;
+	struct ocf_lru_list *dirty_list;
+
+	clean_list = &part->runtime->eviction[ev_part].policy.lru.clean;
+	dirty_list = &part->runtime->eviction[ev_part].policy.lru.dirty;
+
 	OCF_METADATA_EVICTION_LOCK(cline);
-	remove_lru_list(cache, part_id, cline, 0);
-	add_lru_head(cache, part_id, cline, 1);
+	remove_lru_list(cache, clean_list, cline, end_marker);
+	add_lru_head(cache, dirty_list, cline, end_marker);
 	OCF_METADATA_EVICTION_UNLOCK(cline);
 }
 
