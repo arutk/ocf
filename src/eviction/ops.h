@@ -82,9 +82,7 @@ static inline void ocf_eviction_set_hot_cache_line(
 	ENV_BUG_ON(type >= ocf_eviction_max);
 
 	if (likely(evict_policy_ops[type].hot_cline)) {
-		OCF_METADATA_EVICTION_LOCK(line);
 		evict_policy_ops[type].hot_cline(cache, line);
-		OCF_METADATA_EVICTION_UNLOCK(line);
 	}
 }
 

@@ -565,6 +565,8 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	if (node->hot)
 		return;
 
+	OCF_METADATA_EVICTION_LOCK(cline);
+
 	cline_dirty = metadata_test_dirty(cache, cline);
 	list = cline_dirty ? 
 		&part->runtime->eviction[ev_part].policy.lru.dirty :
@@ -579,6 +581,8 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	/* Update LRU */
 	add_lru_head(cache, list, cline, end_marker);
 	balance_lru_list(cache, list, end_marker);
+
+	OCF_METADATA_EVICTION_UNLOCK(cline);
 }
 
 static inline void _lru_init(struct ocf_lru_list *list, unsigned end_marker)
