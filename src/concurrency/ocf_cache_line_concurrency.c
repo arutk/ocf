@@ -833,9 +833,7 @@ int ocf_req_async_lock_rd(struct ocf_request *req, ocf_req_async_lock_cb cb)
 		req->cache->device->concurrency.cache_line;
 	int lock;
 
-	env_rwsem_down_read(&c->lock);
 	lock = _ocf_req_trylock_rd(req);
-	env_rwsem_up_read(&c->lock);
 
 	if (lock != OCF_LOCK_ACQUIRED) {
 		env_rwsem_down_write(&c->lock);
@@ -960,9 +958,7 @@ int ocf_req_async_lock_wr(struct ocf_request *req, ocf_req_async_lock_cb cb)
 		req->cache->device->concurrency.cache_line;
 	int lock;
 
-	env_rwsem_down_read(&c->lock);
 	lock = _ocf_req_trylock_wr(req);
-	env_rwsem_up_read(&c->lock);
 
 	if (lock != OCF_LOCK_ACQUIRED) {
 		env_rwsem_down_write(&c->lock);
