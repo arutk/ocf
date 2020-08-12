@@ -397,9 +397,11 @@ struct ocf_cache_line_settings {
 	uint64_t sector_end;
 };
 
+#define OCF_NUM_GLOBAL_META_LOCKS 4
+
 struct ocf_metadata_lock
 {
-	env_rwsem global; /*!< global metadata lock (GML) */
+	env_rwsem global[OCF_NUM_GLOBAL_META_LOCKS]; /*!< global metadata lock (GML) */
 	env_rwlock status; /*!< Fast lock for status bits */
 	unsigned num_evps;
 	env_spinlock eviction[EVICTION_MAX_PARTS]; /*!< Fast lock for eviction policy */
