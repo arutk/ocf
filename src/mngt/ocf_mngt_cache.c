@@ -422,8 +422,7 @@ static int _ocf_mngt_init_instance_add_cores(
 		if (ocf_mngt_core_init_front_volume(core))
 			goto err;
 
-		core->counters =
-			env_zalloc(sizeof(*core->counters), ENV_MEM_NORMAL);
+		core->counters = alloc_percpu(struct ocf_counters_core);
 		if (!core->counters)
 			goto err;
 

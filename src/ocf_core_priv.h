@@ -90,7 +90,7 @@ struct ocf_core {
 	/* This bit means that core is added into cache */
 	uint32_t added : 1;
 
-	struct ocf_counters_core *counters;
+	struct ocf_counters_core /* __percpu */  *counters;
 
 	void *priv;
 };

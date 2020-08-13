@@ -119,7 +119,7 @@ static void _ocf_mngt_cache_add_core_handle_error(
 		core->added = false;
 		core->opened = false;
 
-		env_free(core->counters);
+		free_percpu(core->counters);
 		core->counters = NULL;
 	}
 
@@ -407,8 +407,7 @@ static void ocf_mngt_cache_add_core_insert(ocf_pipeline_t pipeline,
 	}
 
 	/* When adding new core to cache, allocate stat counters */
-	core->counters =
-		env_zalloc(sizeof(*core->counters), ENV_MEM_NORMAL);
+	core->counters = alloc_percpu(struct ocf_counters_core);
 	if (!core->counters)
 		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_NO_MEM);
 
