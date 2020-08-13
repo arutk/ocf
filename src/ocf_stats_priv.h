@@ -7,20 +7,20 @@
 #define __OCF_STATS_PRIV_H__
 
 struct ocf_counters_block {
-	env_atomic64 read_bytes;
-	env_atomic64 write_bytes;
+	uint64_t read_bytes;
+	uint64_t write_bytes;
 };
 
 struct ocf_counters_error {
-	env_atomic read;
-	env_atomic write;
+	uint32_t read;
+	uint32_t write;
 };
 
 struct ocf_counters_req {
-	env_atomic64 partial_miss;
-	env_atomic64 full_miss;
-	env_atomic64 total;
-	env_atomic64 pass_through;
+	uint64_t partial_miss;
+	uint64_t full_miss;
+	uint64_t total;
+	uint64_t pass_through;
 };
 
 /**
@@ -164,11 +164,11 @@ struct ocf_counters_part {
 
 #ifdef OCF_DEBUG_STATS
 struct ocf_counters_debug {
-	env_atomic64 write_size[IO_PACKET_NO];
-	env_atomic64 read_size[IO_PACKET_NO];
+	uint64_t write_size[IO_PACKET_NO];
+	uint64_t read_size[IO_PACKET_NO];
 
-	env_atomic64 read_align[IO_ALIGN_NO];
-	env_atomic64 write_align[IO_ALIGN_NO];
+	uint64_t read_align[IO_ALIGN_NO];
+	uint64_t write_align[IO_ALIGN_NO];
 };
 #endif
 
