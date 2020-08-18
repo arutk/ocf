@@ -472,7 +472,8 @@ static int _raw_ram_flush_do_asynch(ocf_cache_t cache,
 
 	OCF_DEBUG_TRACE(cache);
 
-	if (!req->info.flush_metadata) {
+	//if (!req->info.flush_metadata) {
+	if (true) {
 		/* Nothing to flush call flush callback */
 		complete(req, 0);
 		return 0;
