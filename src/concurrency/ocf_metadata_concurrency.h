@@ -124,21 +124,13 @@ static inline void ocf_metadata_status_bits_unlock(
 		ENV_BUG();
 }
 
-#define OCF_METADATA_BITS_LOCK_RD() \
-		ocf_metadata_status_bits_lock(&cache->metadata.lock, \
-				OCF_METADATA_RD)
+#define OCF_METADATA_BITS_LOCK_RD() 
 
-#define OCF_METADATA_BITS_UNLOCK_RD() \
-		ocf_metadata_status_bits_unlock(&cache->metadata.lock, \
-				OCF_METADATA_RD)
+#define OCF_METADATA_BITS_UNLOCK_RD()
 
-#define OCF_METADATA_BITS_LOCK_WR() \
-		ocf_metadata_status_bits_lock(&cache->metadata.lock, \
-				OCF_METADATA_WR)
+#define OCF_METADATA_BITS_LOCK_WR() 
 
-#define OCF_METADATA_BITS_UNLOCK_WR() \
-		ocf_metadata_status_bits_unlock(&cache->metadata.lock, \
-				OCF_METADATA_WR)
+#define OCF_METADATA_BITS_UNLOCK_WR() 
 
 void ocf_metadata_hash_lock_rd(struct ocf_metadata_lock *metadata_lock,
 		uint32_t core_id, uint64_t core_line);
