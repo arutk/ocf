@@ -398,11 +398,8 @@ static void _ocf_mngt_flush_portion_end(void *private_data, int error)
 static int _ofc_flush_container_step(struct ocf_request *req)
 {
 	struct flush_container *fc = req->priv;
-	ocf_cache_t cache = fc->cache;
 
-	ocf_metadata_start_exclusive_access(&cache->metadata.lock);
 	_ocf_mngt_flush_portion(fc);
-	ocf_metadata_end_exclusive_access(&cache->metadata.lock);
 
 	return 0;
 }
@@ -438,6 +435,7 @@ static void _ocf_mngt_flush_container(
 
 	fc->req = req;
 	fc->attribs.cache_line_lock = true;
+	fc->attribs.read_lock = true;
 	fc->attribs.cmpl_context = fc;
 	fc->attribs.cmpl_fn = _ocf_mngt_flush_portion_end;
 	fc->attribs.io_queue = cache->mngt_queue;
