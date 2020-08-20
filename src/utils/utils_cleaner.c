@@ -572,6 +572,7 @@ static int _ocf_cleaner_fire_core(struct ocf_request *req)
 {
 	uint32_t i;
 	struct ocf_map_info *iter;
+	ocf_cache_t cache = req->cache;
 
 	OCF_DEBUG_TRACE(req->cache);
 
@@ -589,8 +590,16 @@ static int _ocf_cleaner_fire_core(struct ocf_request *req)
 
 		if (iter->status == LOOKUP_MISS)
 			continue;
-
+		
+		ocf_metadata_hash_lock_rd(&cache->metadata.lock,
+				req->map[i].core_id,
+				req->map[i].core_line);
+	
 		_ocf_cleaner_core_submit_io(req, iter);
+
+		ocf_metadata_hash_unlock_rd(&cache->metadata.lock,
+				req->map[i].core_id,
+				req->map[i].core_line);
 	}
 
 	/* Protect IO completion race */
@@ -671,6 +680,7 @@ static int _ocf_cleaner_fire_cache(struct ocf_request *req)
 
 		offset = ocf_line_size(cache) * iter->hash;
 
+		/* TODO: under read lock ?? */
 		part_id = ocf_metadata_hash_get_partition_id(cache, iter->coll_idx);
 
 		io = ocf_new_cache_io(cache, req->io_queue,
@@ -815,7 +825,7 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 	 * cleaning request overlapping
 	 */
 	uint32_t max = _ocf_cleaner_get_req_max_count(count, false);
-	ocf_cache_line_t cache_line;
+	struct flush_data cline_data;
 	/* it is possible that more than one cleaning request will be generated
 	 * for each cleaning order, thus multiple allocations. At the end of
 	 * loop, req is set to zero and NOT deallocated, as deallocation is
@@ -825,9 +835,7 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 	 * contains reference to the master request
 	 */
 	struct ocf_request *req = NULL, *master;
-	int err;
-	ocf_core_id_t core_id;
-	uint64_t core_sector;
+	int err = 0;
 
 	/* Allocate master request */
 	master = _ocf_cleaner_alloc_master_req(cache, max, attribs);
@@ -871,25 +879,33 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 
 		/* when request allocation failed stop processing */
 		if (!req) {
-			master->error = -OCF_ERR_NO_MEM;
+			master->error = err = -OCF_ERR_NO_MEM;
 			break;
 		}
 
 		if (attribs->getter(cache, attribs->getter_context,
-				i, &cache_line)) {
+				i, &cline_data)) {
 			OCF_DEBUG_MSG(cache, "Skip");
 			continue;
 		}
 
+		if (attribs->read_lock) {
+			ocf_metadata_hash_lock_rd(&cache->metadata.lock,
+					cline_data.core_id,
+					cline_data.core_line);
+		}
+
+
 		/* when line already cleaned - rare condition under heavy
 		 * I/O workload.
 		 */
-		if (!metadata_test_dirty(cache, cache_line)) {
+		/* TODO is this really necessary? */
+		if (!metadata_test_dirty(cache, cline_data.cache_line)) {
 			OCF_DEBUG_MSG(cache, "Not dirty");
-			continue;
+			goto unlock;
 		}
 
-		if (!metadata_test_valid_any(cache, cache_line)) {
+		if (!metadata_test_valid_any(cache, cline_data.cache_line)) {
 			OCF_DEBUG_MSG(cache, "No any valid");
 
 			/*
@@ -897,21 +913,17 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 			 * Cache line (sector) cannot be dirty and not valid
 			 */
 			ENV_BUG();
-			continue;
+			goto unlock;
 		}
 
-		/* Get mapping info */
-		ocf_metadata_hash_get_core_info(cache, cache_line, &core_id,
-				&core_sector);
-
-		if (unlikely(!cache->core[core_id].opened)) {
+		if (unlikely(!cache->core[cline_data.core_id].opened)) {
 			OCF_DEBUG_MSG(cache, "Core object inactive");
-			continue;
+			goto unlock;
 		}
 
-		req->map[i_out].core_id = core_id;
-		req->map[i_out].core_line = core_sector;
-		req->map[i_out].coll_idx = cache_line;
+		req->map[i_out].core_id = cline_data.core_id;
+		req->map[i_out].core_line = cline_data.core_line;
+		req->map[i_out].coll_idx = cline_data.cache_line;
 		req->map[i_out].status = LOOKUP_HIT;
 		req->map[i_out].hash = i_out;
 		i_out++;
@@ -921,11 +933,21 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 			if (err) {
 				_ocf_cleaner_fire_error(master, req, err);
 				req  = NULL;
-				break;
+				goto unlock;
 			}
 			i_out = 0;
 			req  = NULL;
 		}
+
+unlock:
+		if (attribs->read_lock) {
+			ocf_metadata_hash_unlock_rd(&cache->metadata.lock,
+					cline_data.core_id,
+					cline_data.core_line);
+		}
+
+		if (err)
+			break;
 	}
 
 	if (req) {
@@ -941,12 +963,12 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 }
 
 static int _ocf_cleaner_do_flush_data_getter(struct ocf_cache *cache,
-		void *context, uint32_t item, ocf_cache_line_t *line)
+		void *context, uint32_t item, struct flush_data *data)
 {
 	struct flush_data *flush = context;
 
 	if (flush[item].cache_line < cache->device->collision_table_entries) {
-		(*line) = flush[item].cache_line;
+		*data = flush[item];
 		return 0;
 	} else {
 		return -1;

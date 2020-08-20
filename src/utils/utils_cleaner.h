@@ -9,6 +9,7 @@
 #include "../ocf_request.h"
 
 struct ocf_cleaner_attribs;
+struct flush_data;
 
 /**
  * @brief Getter for next cache line to be cleaned
@@ -23,13 +24,15 @@ struct ocf_cleaner_attribs;
  */
 typedef int (*ocf_cleaner_get_item)(struct ocf_cache *cache,
 		void *getter_context, uint32_t item,
-		ocf_cache_line_t *line);
+		struct flush_data *line);
 
 /**
  * @brief Cleaning attributes for clean request
  */
 struct ocf_cleaner_attribs {
 	uint8_t  cache_line_lock : 1;	/*!< Clean under cache line lock */
+	
+	uint8_t  read_lock : 1;	/*!< Clean under cache line lock */
 
 	uint8_t  do_sort : 1;	/*!< Sort cache lines which will be cleaned */
 

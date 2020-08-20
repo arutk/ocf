@@ -367,7 +367,7 @@ static void evp_lru_clean_end(void *private_data, int error)
 }
 
 static int evp_lru_clean_getter(ocf_cache_t cache, void *getter_context,
-		uint32_t item, ocf_cache_line_t *line)
+		uint32_t item, struct flush_data *data)
 {
 	struct ocf_lru_iter_state *lru_iter = getter_context;
 	ocf_cache_line_t cline;
@@ -386,7 +386,11 @@ static int evp_lru_clean_getter(ocf_cache_t cache, void *getter_context,
 
 		ENV_BUG_ON(!metadata_test_dirty(cache, cline));
 
-		*line = cline;
+		data->cache_line = cline;
+
+		ocf_metadata_hash_get_core_info(cache, cline, &data->core_id,
+				&data->core_line);
+
 		return 0;
 	}
 
@@ -400,6 +404,7 @@ static void evp_lru_clean(ocf_cache_t cache, ocf_queue_t io_queue,
 	struct ocf_user_part *part = &cache->user_parts[part_id];
 	struct ocf_cleaner_attribs attribs = {
 		.cache_line_lock = true,
+		.read_lock = false,
 		.do_sort = true,
 
 		.cmpl_context = &part->eviction_clean_iter,

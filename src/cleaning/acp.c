@@ -489,6 +489,7 @@ static void _acp_flush(struct acp_context *acp)
 		.cmpl_context = acp,
 		.cmpl_fn = _acp_flush_end,
 		.cache_line_lock = false,
+		.read_lock = true,
 		.do_sort = false,
 		.io_queue = cache->cleaner.io_queue,
 	};

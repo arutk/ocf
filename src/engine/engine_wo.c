@@ -82,6 +82,9 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 			io = false;
 		}
 
+		ocf_metadata_hash_lock_rd(&cache->metadata.lock,
+				entry->core_id, entry->core_line);
+
 		/* try to seek directly to the last sector */
 		if (entry->status == LOOKUP_MISS ||
 				ocf_engine_map_all_sec_clean(req, line)) {
@@ -128,6 +131,9 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 
 			offset += increment;
 		} while (i <= e);
+
+		ocf_metadata_hash_unlock_rd(&cache->metadata.lock,
+				entry->core_id, entry->core_line);
 	}
 
 	if (io)

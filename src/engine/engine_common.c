@@ -499,7 +499,8 @@ int ocf_engine_prepare_clines(struct ocf_request *req,
 }
 
 static int _ocf_engine_clean_getter(struct ocf_cache *cache,
-		void *getter_context, uint32_t item, ocf_cache_line_t *line)
+		void *getter_context, uint32_t item,
+		struct flush_data *data)
 {
 	struct ocf_cleaner_attribs *attribs = getter_context;
 	struct ocf_request *req = attribs->cmpl_context;
@@ -516,7 +517,10 @@ static int _ocf_engine_clean_getter(struct ocf_cache *cache,
 			continue;
 
 		/* Line to be cleaned found, go to next item and return */
-		*line = entry->coll_idx;
+		data->cache_line = entry->coll_idx;
+		data->core_line = entry->core_line;
+		data->core_id = entry->core_id;
+
 		attribs->getter_item++;
 		return 0;
 	}
@@ -529,6 +533,7 @@ void ocf_engine_clean(struct ocf_request *req)
 	/* Initialize attributes for cleaner */
 	struct ocf_cleaner_attribs attribs = {
 			.cache_line_lock = false,
+			.read_lock = false,
 
 			.cmpl_context = req,
 			.cmpl_fn = _ocf_engine_clean_end,
