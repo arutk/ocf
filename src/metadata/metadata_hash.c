@@ -2463,6 +2463,15 @@ void ocf_metadata_hash_set_partition_prev(
 	info->partition_prev = prev_line;
 }
 
+void ocf_metadata_hash_set_partition_id(
+		struct ocf_cache *cache, ocf_cache_line_t line,
+		ocf_part_id_t part_id)
+{
+	struct ocf_metadata_list_info *info = get_list_info(cache, line);
+
+	info->partition_id = part_id;
+}
+
 void ocf_metadata_hash_set_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_part_id_t part_id, ocf_cache_line_t next_line,

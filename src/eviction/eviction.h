@@ -11,7 +11,7 @@
 #include "lru_structs.h"
 #include "../ocf_request.h"
 
-#define OCF_TO_EVICTION_MIN 128UL
+#define OCF_TO_EVICTION_MIN 0UL
 #define OCF_PENDING_EVICTION_LIMIT 512UL
 
 #define EVICTION_MAX_PARTS 24U
@@ -38,11 +38,11 @@ struct eviction_policy_ops {
 	void (*rm_cline)(ocf_cache_t cache,
 			ocf_cache_line_t cline);
 	bool (*can_evict)(ocf_cache_t cache);
-	uint32_t (*req_clines)(ocf_cache_t cache,
-			ocf_queue_t io_queue, ocf_part_id_t part_id,
+	uint32_t (*req_clines)(struct ocf_request *req,
+			ocf_part_id_t part_id,
 			uint32_t cline_no);
-	void (*hot_cline)(ocf_cache_t cache,
-			ocf_cache_line_t cline);
+	void (*hot_cline)(ocf_cache_t cache, 
+			uint32_t cline_no);
 	void (*init_evp)(ocf_cache_t cache,
 			ocf_part_id_t part_id, unsigned num_instances);
 	void (*dirty_cline)(ocf_cache_t cache,
@@ -63,8 +63,7 @@ extern struct eviction_policy_ops evict_policy_ops[ocf_eviction_max];
  * or the destination partition ID for the free buffers
  * (it matches label and is part of the object (#core_id) IO group)
  */
-int space_managment_evict_do(ocf_cache_t cache,
-		struct ocf_request *req, uint32_t evict_cline_no);
+int space_managment_evict_do(struct ocf_request *req);
 
 int space_management_free(ocf_cache_t cache, uint32_t count);
 

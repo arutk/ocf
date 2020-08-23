@@ -16,6 +16,7 @@ struct ocf_req_info {
 	/* Number of hits, invalid, misses. */
 	unsigned int hit_no;
 	unsigned int invalid_no;
+	unsigned int seq_no;
 
 	uint32_t dirty_all;
 	/*!< Number of dirty line in request*/
@@ -106,6 +107,8 @@ struct ocf_req_discard_info {
 struct ocf_request {
 	struct ocf_io_internal ioi;
 	/*!< OCF IO associated with request */
+
+	const struct ocf_engine_callbacks *engine_cbs;
 
 	env_atomic ref_count;
 	/*!< Reference usage count, once OCF request reaches zero it
@@ -202,6 +205,8 @@ struct ocf_request {
 
 	struct ocf_req_info info;
 	/*!< Detailed request info */
+
+	unsigned eviction_idx;
 
 	void (*complete)(struct ocf_request *ocf_req, int error);
 	/*!< Request completion function */

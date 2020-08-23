@@ -104,6 +104,16 @@ void ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 	ocf_freelist_put_cache_line(cache->freelist, cache_line);
 }
 
+void ocf_metadata_sparse_cache_line_no_freelist(struct ocf_cache *cache,
+		uint32_t cache_line)
+{
+	ocf_part_id_t partition_id =
+			ocf_metadata_hash_get_partition_id(cache, cache_line);
+
+	ocf_metadata_remove_from_collision(cache, cache_line, partition_id);
+}
+
+
 static void _ocf_metadata_sparse_cache_line(struct ocf_cache *cache,
 		uint32_t cache_line)
 {

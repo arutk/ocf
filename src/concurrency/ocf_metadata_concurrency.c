@@ -253,10 +253,8 @@ int ocf_metadata_hash_try_lock(struct ocf_metadata_lock *metadata_lock,
 		ENV_BUG();
 	}
 
-	if (!result)
-		return -1;
 
-	return 0;
+	return result;
 }
 
 /* NOTE: attempt to acquire hash lock for multiple core lines may end up
@@ -270,6 +268,25 @@ void ocf_metadata_hash_lock_rd(struct ocf_metadata_lock *metadata_lock,
 
 	ocf_metadata_start_shared_access(metadata_lock, core_line);
 	ocf_metadata_hash_lock(metadata_lock, hash, OCF_METADATA_RD);
+}
+
+bool _ocf_metadata_hash_trylock_rd(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line)
+{
+	ocf_cache_line_t hash = ocf_metadata_hash_func(metadata_lock->cache,
+			core_line, core_id);
+
+	return (0 == ocf_metadata_hash_try_lock(metadata_lock, hash,
+				OCF_METADATA_RD));
+}
+
+void _ocf_metadata_hash_unlock_rd(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line)
+{
+	ocf_cache_line_t hash = ocf_metadata_hash_func(metadata_lock->cache,
+			core_line, core_id);
+
+	ocf_metadata_hash_unlock(metadata_lock, hash, OCF_METADATA_RD);
 }
 
 void ocf_metadata_hash_unlock_rd(struct ocf_metadata_lock *metadata_lock,
@@ -290,6 +307,25 @@ void ocf_metadata_hash_lock_wr(struct ocf_metadata_lock *metadata_lock,
 
 	ocf_metadata_start_shared_access(metadata_lock, core_line);
 	ocf_metadata_hash_lock(metadata_lock, hash, OCF_METADATA_WR);
+}
+
+bool _ocf_metadata_hash_trylock_wr(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line)
+{
+	ocf_cache_line_t hash = ocf_metadata_hash_func(metadata_lock->cache,
+			core_line, core_id);
+		
+	return (0 == ocf_metadata_hash_try_lock(metadata_lock, hash,
+				OCF_METADATA_WR));
+}
+
+void _ocf_metadata_hash_unlock_wr(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line)
+{
+	ocf_cache_line_t hash = ocf_metadata_hash_func(metadata_lock->cache,
+			core_line, core_id);
+
+	ocf_metadata_hash_unlock(metadata_lock, hash, OCF_METADATA_WR);
 }
 
 void ocf_metadata_hash_unlock_wr(struct ocf_metadata_lock *metadata_lock,
@@ -351,6 +387,23 @@ void ocf_metadata_hash_unlock_wr(struct ocf_metadata_lock *metadata_lock,
 #define for_each_req_hash_asc(req, hash) \
 	for (hash = _MIN_HASH(req); hash <= _MAX_HASH(req); \
 			hash = _HASH_NEXT(req, hash))
+
+bool ocf_req_hash_in_range(struct ocf_request *req,
+		ocf_core_id_t core_id, uint64_t core_line)
+{
+	ocf_cache_line_t hash = ocf_metadata_hash_func(
+			req->cache, core_line, core_id);
+	
+	if (!_HAS_GAP(req)) {
+		return (hash >= _MIN_HASH(req) &&
+				hash <= _MAX_HASH(req));
+	}
+
+	return (hash >= _MIN_HASH(req) && hash <= _GAP_START(req)) ||
+		(hash > _GAP_START(req) + _GAP_VAL(req) &&
+		 		hash <=  _MAX_HASH(req));
+
+}
 
 void ocf_req_hash_lock_rd(struct ocf_request *req)
 {

@@ -33,26 +33,41 @@ struct ocf_user_part_runtime {
         struct cleaning_policy cleaning;
 };
 
+typedef bool ( *_lru_hash_locked_pfn)(void *context,
+		ocf_core_id_t core_id, uint64_t core_line);
+
+
 struct ocf_lru_iter_state
 {
 	ocf_cache_t cache;
 	ocf_part_id_t part_id;
 	struct ocf_user_part *part;
-	ocf_cache_line_t curr_cline[EVICTION_MAX_PARTS];
-	bool empty_evps[EVICTION_MAX_PARTS];
 	ocf_cache_line_t end_marker;
 	uint32_t empty_evps_no;
 	uint32_t evp;
 	uint32_t num_evps;
+	_lru_hash_locked_pfn hash_locked;
+	void *context;
+	bool empty_evps[EVICTION_MAX_PARTS];
+	bool clean : 1;
+	bool lock_write : 1;
+	bool exclusive: 1;
+};
+
+struct ocf_part_cleaning_ctx {
+	env_atomic state;
+	struct ocf_lru_iter_state lru_iter;
+	env_atomic64  next_lru;
+	ocf_cache_line_t clines[32];
+	unsigned num_clines;
 };
 
 struct ocf_user_part {
         struct ocf_user_part_config *config;
         struct ocf_user_part_runtime *runtime;
 
-	env_atomic cleaning;
-	struct ocf_lru_iter_state eviction_clean_iter;
-	uint32_t next_evp;
+	struct ocf_part_cleaning_ctx cleaning;
+
         struct ocf_lst_entry lst_valid;
 };
 

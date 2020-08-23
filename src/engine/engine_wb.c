@@ -42,7 +42,7 @@ static void _ocf_write_wb_update_bits(struct ocf_request *req)
 			ocf_set_dirty_map_info(req);
 		}
 
-		ocf_req_hash_unlock_rd(req);
+		ocf_req_hash_unlock_wr(req);
 	}
 }
 
@@ -186,10 +186,11 @@ int ocf_write_wb(struct ocf_request *req)
 
 	/* Set resume io_if */
 	req->io_if = &_io_if_wb_resume;
+	req->engine_cbs = &_wb_engine_callbacks;
 
 	/* TODO: Handle fits into dirty */
 
-	lock = ocf_engine_prepare_clines(req, &_wb_engine_callbacks);
+	lock = ocf_engine_prepare_clines(req);
 
 	if (!req->info.mapping_error) {
 		if (lock >= 0) {

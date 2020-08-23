@@ -26,6 +26,10 @@ typedef int (*ocf_cleaner_get_item)(struct ocf_cache *cache,
 		void *getter_context, uint32_t item,
 		struct flush_data *line);
 
+typedef void (*ocf_cleaner_put_item)(struct ocf_cache *cache,
+		void *getter_context, struct flush_data *line);
+
+
 /**
  * @brief Cleaning attributes for clean request
  */
@@ -45,10 +49,12 @@ struct ocf_cleaner_attribs {
 		 */
 	void (*cmpl_fn)(void *priv, int error); /*!< Completion function of requester */
 
-	ocf_cleaner_get_item getter;
+	ocf_cleaner_get_item get;
 		/*!< Getter for collecting cache lines which will be cleaned */
 	void *getter_context;
-		/*!< Context for getting cache lines */
+
+	ocf_cleaner_put_item put;
+		/*!< Context for gettingi/putting cache lines */
 
 	ocf_queue_t io_queue;
 };

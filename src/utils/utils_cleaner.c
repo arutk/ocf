@@ -841,7 +841,7 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 	 * contains reference to the master request
 	 */
 	struct ocf_request *req = NULL, *master;
-	int err = 0;
+	int err;
 
 	/* Allocate master request */
 	master = _ocf_cleaner_alloc_master_req(cache, max, attribs);
@@ -885,11 +885,11 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 
 		/* when request allocation failed stop processing */
 		if (!req) {
-			master->error = err = -OCF_ERR_NO_MEM;
+			master->error = -OCF_ERR_NO_MEM;
 			break;
 		}
 
-		if (attribs->getter(cache, attribs->getter_context,
+		if (attribs->get(cache, attribs->getter_context,
 				i, &cline_data)) {
 			OCF_DEBUG_MSG(cache, "Skip");
 			continue;
@@ -934,26 +934,28 @@ void ocf_cleaner_fire(struct ocf_cache *cache,
 		req->map[i_out].hash = i_out;
 		i_out++;
 
-		if (max == i_out) {
-			err = _ocf_cleaner_do_fire(req, i_out, attribs->do_sort);
-			if (err) {
-				_ocf_cleaner_fire_error(master, req, err);
-				req  = NULL;
-				goto unlock;
-			}
-			i_out = 0;
-			req  = NULL;
-		}
-
 unlock:
 		if (attribs->read_lock) {
 			ocf_metadata_hash_unlock_rd(&cache->metadata.lock,
 					cline_data.core_id,
 					cline_data.core_line);
 		}
+		if (attribs->put) {
+			attribs->put(cache, attribs->getter_context,
+				&cline_data);
+		}
 
-		if (err)
-			break;
+		if (max == i_out) {
+			err = _ocf_cleaner_do_fire(req, i_out, attribs->do_sort);
+			if (err) {
+				_ocf_cleaner_fire_error(master, req, err);
+				req  = NULL;
+				break;
+			}
+			i_out = 0;
+			req  = NULL;
+		}
+
 	}
 
 	if (req) {
@@ -985,7 +987,7 @@ int ocf_cleaner_do_flush_data_async(struct ocf_cache *cache,
 		struct flush_data *flush, uint32_t count,
 		struct ocf_cleaner_attribs *attribs)
 {
-	attribs->getter = _ocf_cleaner_do_flush_data_getter;
+	attribs->get = _ocf_cleaner_do_flush_data_getter;
 	attribs->getter_context = flush;
 	attribs->count = count;
 

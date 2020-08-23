@@ -6,6 +6,7 @@
 #include "eviction.h"
 #include "ops.h"
 #include "../utils/utils_part.h"
+#include "../engine/engine_common.h"
 
 struct eviction_policy_ops evict_policy_ops[ocf_eviction_max] = {
 	[ocf_eviction_lru] = {
@@ -40,12 +41,13 @@ static uint32_t ocf_evict_calculate(struct ocf_user_part *part,
 	return to_evict;
 }
 
-static inline uint32_t ocf_evict_do(ocf_cache_t cache,
-		ocf_queue_t io_queue, const uint32_t evict_cline_no,
-		ocf_part_id_t target_part_id)
+static inline uint32_t ocf_evict_do(struct ocf_request *req)
 {
 	uint32_t to_evict = 0, evicted = 0;
 	struct ocf_user_part *part;
+	ocf_part_id_t target_part_id = req->part_id;
+	ocf_cache_t cache = req->cache;
+	uint32_t evict_cline_no = ocf_engine_unmapped_count(req);
 	struct ocf_user_part *target_part = &cache->user_parts[target_part_id];
 	ocf_part_id_t part_id;
 
@@ -83,7 +85,7 @@ static inline uint32_t ocf_evict_do(ocf_cache_t cache,
 			continue;
 		}
 
-		evicted += ocf_eviction_need_space(cache, io_queue,
+		evicted += ocf_eviction_need_space(cache, req,
 				part_id, to_evict);
 	}
 
@@ -94,7 +96,7 @@ static inline uint32_t ocf_evict_do(ocf_cache_t cache,
 		/* Now we can evict form targeted partition */
 		to_evict = ocf_evict_calculate(target_part, evict_cline_no);
 		if (to_evict) {
-			evicted += ocf_eviction_need_space(cache, io_queue,
+			evicted += ocf_eviction_need_space(cache, req,
 					target_part_id, to_evict);
 		}
 	}
@@ -103,21 +105,14 @@ out:
 	return evicted;
 }
 
-int space_managment_evict_do(struct ocf_cache *cache,
-		struct ocf_request *req, uint32_t evict_cline_no)
+int space_managment_evict_do(struct ocf_request *req)
 {
+	uint32_t needed = ocf_engine_unmapped_count(req);
 	uint32_t evicted;
-	uint32_t free;
 
-	free = ocf_freelist_num_free(cache->freelist);
-	if (evict_cline_no <= free)
-		return LOOKUP_MAPPED;
+	evicted = ocf_evict_do(req);
 
-	evict_cline_no -= free;
-	evicted = ocf_evict_do(cache, req->io_queue, evict_cline_no,
-			req->part_id);
-
-	if (evict_cline_no <= evicted)
+	if (needed <= evicted)
 		return LOOKUP_MAPPED;
 
 	req->info.mapping_error |= true;

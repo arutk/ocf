@@ -1142,6 +1142,26 @@ bool ocf_cache_line_are_waiters(struct ocf_cache *cache,
 	return are;
 }
 
+/* it is caller responsibility to assure that noone acquires 
+ * a lock in background */
+bool ocf_cache_line_is_locked_exclusively(struct ocf_cache *cache,
+		ocf_cache_line_t line)
+{
+	struct ocf_cache_line_concurrency *c = cache->device->concurrency.cache_line;
+	env_atomic *access = &c->access[line];
+	int val = env_atomic_read(access);
+	
+	ENV_BUG_ON(val == OCF_CACHE_LINE_ACCESS_IDLE);
+
+	if (val == OCF_CACHE_LINE_ACCESS_ONE_RD)
+		return true;
+
+	if (val == OCF_CACHE_LINE_ACCESS_WR)
+		return !ocf_cache_line_are_waiters(cache, line);
+
+	return false;
+}
+
 /*
  *
  */
@@ -1155,8 +1175,17 @@ uint32_t ocf_cache_line_concurrency_suspended_no(struct ocf_cache *cache)
 bool ocf_cache_line_try_lock_rd(struct ocf_cache *cache, ocf_cache_line_t line)
 {
 	struct ocf_cache_line_concurrency *c = cache->device->concurrency.cache_line;
-	return __lock_cache_line_rd(c, line, NULL, NULL, 0);
+
+	return __try_lock_rd_idle(c, line);
 }
+
+bool ocf_cache_line_try_lock_wr(struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	struct ocf_cache_line_concurrency *c = cache->device->concurrency.cache_line;
+
+	return __try_lock_wr(c, line);
+}
+
 
 /*
  *
@@ -1168,5 +1197,14 @@ void ocf_cache_line_unlock_rd(struct ocf_cache *cache, ocf_cache_line_t line)
 	OCF_DEBUG_RQ(cache, "Cache line = %u", line);
 
 	__unlock_cache_line_rd(c, line);
+}
+
+void ocf_cache_line_unlock_wr(struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	struct ocf_cache_line_concurrency *c = cache->device->concurrency.cache_line;
+
+	OCF_DEBUG_RQ(cache, "Cache line = %u", line);
+
+	__unlock_cache_line_wr(c, line);
 }
 

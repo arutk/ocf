@@ -49,6 +49,37 @@ static void __set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 	}
 }
 
+/* __set_cache_line_invalid without adding cline to freelist and removing from 
+ * LRU policy */
+static void __set_cache_line_invalid_no_freelist(struct ocf_cache *cache, uint8_t start_bit,
+		uint8_t end_bit, ocf_cache_line_t line,
+		ocf_core_id_t core_id, ocf_part_id_t part_id)
+{
+	ocf_core_t core;
+	bool is_valid;
+
+	ENV_BUG_ON(core_id >= OCF_CORE_MAX);
+	core = ocf_cache_get_core(cache, core_id);
+
+	if (metadata_clear_valid_sec_changed(cache, line, start_bit, end_bit,
+			&is_valid)) {
+		/*
+		 * Update the number of cached data for that core object
+		 */
+		env_atomic_dec(&core->runtime_meta->cached_clines);
+		env_atomic_dec(&core->runtime_meta->
+				part_counters[part_id].cached_clines);
+	}
+
+	/* If we have waiters, do not remove cache line
+	 * for this cache line which will use one, clear
+	 * only valid bits
+	 */
+	if (!is_valid && !ocf_cache_line_are_waiters(cache, line)) {
+		ocf_metadata_sparse_cache_line_no_freelist(cache, line);
+	}
+}
+
 void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, struct ocf_request *req, uint32_t map_idx)
 {
@@ -77,6 +108,18 @@ void set_cache_line_invalid_no_flush(struct ocf_cache *cache, uint8_t start_bit,
 	ocf_metadata_hash_get_core_and_part_id(cache, line, &core_id, &part_id);
 
 	__set_cache_line_invalid(cache, start_bit, end_bit, line, core_id,
+			part_id);
+}
+
+void set_cache_line_invalid_no_flush_no_freelist(struct ocf_cache *cache, uint8_t start_bit,
+		uint8_t end_bit, ocf_cache_line_t line)
+{
+	ocf_part_id_t part_id;
+	ocf_core_id_t core_id;
+
+	ocf_metadata_hash_get_core_and_part_id(cache, line, &core_id, &part_id);
+
+	__set_cache_line_invalid_no_freelist(cache, start_bit, end_bit, line, core_id,
 			part_id);
 }
 

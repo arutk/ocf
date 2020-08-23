@@ -101,6 +101,13 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 void set_cache_line_invalid_no_flush(struct ocf_cache *cache, uint8_t start_bit,
 		uint8_t end_bit, ocf_cache_line_t line);
 
+void set_cache_line_invalid_no_flush_no_freelist(struct ocf_cache *cache, uint8_t start_bit,
+		uint8_t end_bit, ocf_cache_line_t line);
+
+
+void set_cache_line_valid_noflush(struct ocf_cache *cache, uint8_t start_bit,
+		uint8_t end_bit, ocf_cache_line_t line);
+
 /**
  * @brief Set cache line valid
  *

@@ -8,10 +8,12 @@
 #include "eviction.h"
 #include "lru_structs.h"
 
+struct ocf_request;
+
 void evp_lru_init_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 void evp_lru_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 bool evp_lru_can_evict(struct ocf_cache *cache);
-uint32_t evp_lru_req_clines(struct ocf_cache *cache, ocf_queue_t io_queue,
+uint32_t evp_lru_req_clines(struct ocf_request *req,
 		ocf_part_id_t part_id, uint32_t cline_no);
 void evp_lru_hot_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 void evp_lru_init_evp(struct ocf_cache *cache, ocf_part_id_t part_id,

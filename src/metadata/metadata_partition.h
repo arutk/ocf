@@ -61,6 +61,10 @@ void ocf_metadata_hash_set_partition_info(
 		ocf_part_id_t part_id, ocf_cache_line_t next_line,
 		ocf_cache_line_t prev_line);
 
+void ocf_metadata_hash_set_partition_id(
+		struct ocf_cache *cache, ocf_cache_line_t line,
+		ocf_part_id_t part_id);
+
 void ocf_metadata_add_to_partition(struct ocf_cache *cache,
 		ocf_part_id_t part_id, ocf_cache_line_t line);
 

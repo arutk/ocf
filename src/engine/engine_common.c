@@ -94,19 +94,19 @@ static inline int _ocf_engine_check_map_entry(struct ocf_cache *cache,
 void ocf_engine_update_req_info(struct ocf_cache *cache,
 		struct ocf_request *req, uint32_t entry)
 {
-	uint8_t start_sector = 0;
-	uint8_t end_sector = ocf_line_end_sector(cache);
+	uint8_t start_sector;
+	uint8_t end_sector;
 	struct ocf_map_info *_entry = &(req->map[entry]);
 	bool valid_all;
 	bool dirty_all;
 	bool dirty_any;
 
-	start_sector = ocf_map_line_start_sector(req, entry);
-	end_sector = ocf_map_line_end_sector(req, entry);
-
 	/* Handle return value */
 	switch (_entry->status) {
 	case LOOKUP_HIT:
+		start_sector = ocf_map_line_start_sector(req, entry);
+		end_sector = ocf_map_line_end_sector(req, entry);
+
 		metadata_test_all_sec(cache, _entry->coll_idx,
 				start_sector, end_sector,
 				NULL, &valid_all, &dirty_any, &dirty_all);
@@ -134,8 +134,6 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 
 		break;
 	case LOOKUP_MISS:
-		req->info.seq_req = false;
-		break;
 	case LOOKUP_MAPPED:
 	case LOOKUP_REPLACED:
 		break;
@@ -144,15 +142,26 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 		break;
 	}
 
-	/* Check if cache hit is sequential */
-	if (req->info.seq_req && entry) {
+	if (entry && _entry->status != LOOKUP_MISS && req->map[entry - 1].status != LOOKUP_MISS) {
 		if (ocf_metadata_map_lg2phy(cache,
-			(req->map[entry - 1].coll_idx)) + 1 !=
-			ocf_metadata_map_lg2phy(cache,
-			_entry->coll_idx)) {
-			req->info.seq_req = false;
+				(req->map[entry - 1].coll_idx)) + 1 ==
+				ocf_metadata_map_lg2phy(cache,
+				_entry->coll_idx)) {
+			req->info.seq_no++;
 		}
 	}
+	if (entry < req->core_line_count - 1 && _entry->status != LOOKUP_MISS && req->map[entry + 1].status != LOOKUP_MISS) {
+		if (ocf_metadata_map_lg2phy(cache,
+				(req->map[entry + 1].coll_idx)) ==
+				ocf_metadata_map_lg2phy(cache,
+				_entry->coll_idx) + 1) {
+			req->info.seq_no++;
+		}
+	}
+
+	req->info.seq_req = (req->info.seq_no == req->core_line_count - 1) &&
+		(req->core_line_count > 1 || _entry->status != LOOKUP_MISS);  // 1 core line request is sequential iff it's mapped
+
 }
 
 void ocf_engine_traverse(struct ocf_request *req)
@@ -176,9 +185,9 @@ void ocf_engine_traverse(struct ocf_request *req)
 		ocf_engine_lookup_map_entry(cache, entry, core_id,
 				core_line);
 
-		if (entry->status != LOOKUP_HIT) {
-			req->info.seq_req = false;
+		ocf_engine_update_req_info(cache, req, i);
 
+		if (entry->status != LOOKUP_HIT) {
 			/* There is miss then lookup for next map entry */
 			OCF_DEBUG_PARAM(cache, "Miss, core line = %llu",
 					entry->core_line);
@@ -190,8 +199,6 @@ void ocf_engine_traverse(struct ocf_request *req)
 
 		/* Update eviction (LRU) */
 		ocf_eviction_set_hot_cache_line(cache, entry->coll_idx);
-
-		ocf_engine_update_req_info(cache, req, i);
 	}
 
 	OCF_DEBUG_PARAM(cache, "Sequential - %s", req->info.seq_req ?
@@ -217,8 +224,9 @@ int ocf_engine_check(struct ocf_request *req)
 
 		struct ocf_map_info *entry = &(req->map[i]);
 
+		ocf_engine_update_req_info(cache, req, i);
+
 		if (entry->status == LOOKUP_MISS) {
-			req->info.seq_req = false;
 			continue;
 		}
 
@@ -237,7 +245,6 @@ int ocf_engine_check(struct ocf_request *req)
 			OCF_DEBUG_PARAM(cache, "Valid, Cache line %u",
 					entry->coll_idx);
 
-			ocf_engine_update_req_info(cache, req, i);
 		}
 	}
 
@@ -247,32 +254,31 @@ int ocf_engine_check(struct ocf_request *req)
 	return result;
 }
 
-static void ocf_engine_map_cache_line(struct ocf_request *req,
-		uint64_t core_line, unsigned int hash_index,
-		ocf_cache_line_t *cache_line)
+
+void ocf_map_cache_line(struct ocf_request *req,
+               unsigned int idx, ocf_cache_line_t cache_line)
 {
-	struct ocf_cache *cache = req->cache;
+	ocf_cache_t cache = req->cache;
 	ocf_core_id_t core_id = ocf_core_get_id(req->core);
 	ocf_part_id_t part_id = req->part_id;
 	ocf_cleaning_t clean_policy_type;
+	unsigned int hash_index = req->map[idx].hash;
+	uint16_t status = req->map[idx].status;
 
-	if (!ocf_freelist_get_cache_line(cache->freelist, cache_line)) {
-		req->info.mapping_error = 1;
-		return;
-	}
-
-	ocf_metadata_add_to_partition(cache, part_id, *cache_line);
+	uint64_t core_line = req->core_line_first + idx;
 
 	/* Add the block to the corresponding collision list */
-	ocf_metadata_hash_start_collision_shared_access(cache, *cache_line);
+	ocf_metadata_hash_start_collision_shared_access(cache, cache_line);
 	ocf_metadata_add_to_collision(cache, core_id, core_line, hash_index,
-			*cache_line);
-	ocf_metadata_hash_end_collision_shared_access(cache, *cache_line);
+			cache_line);
+	ocf_metadata_hash_end_collision_shared_access(cache, cache_line);
 
-	ocf_eviction_init_cache_line(cache, *cache_line, part_id);
 
 	/* Update LRU:: Move this node to head of lru list. */
-	ocf_eviction_set_hot_cache_line(cache, *cache_line);
+	if (status != LOOKUP_REPLACED) {
+		ocf_eviction_init_cache_line(cache, cache_line, part_id);
+		ocf_eviction_set_hot_cache_line(cache, cache_line);
+	}
 
 	/* Update dirty cache-block list */
 	clean_policy_type = cache->conf_meta->cleaning_policy_type;
@@ -281,7 +287,27 @@ static void ocf_engine_map_cache_line(struct ocf_request *req,
 
 	if (cleaning_policy_ops[clean_policy_type].init_cache_block != NULL)
 		cleaning_policy_ops[clean_policy_type].
-				init_cache_block(cache, *cache_line);
+				init_cache_block(cache, cache_line);
+
+	req->map[idx].coll_idx = cache_line;
+}
+
+
+static void ocf_engine_map_cache_line(struct ocf_request *req,
+		unsigned int idx)
+{
+	struct ocf_cache *cache = req->cache;
+	ocf_cache_line_t cache_line;
+
+	if (!ocf_freelist_get_cache_line(cache->freelist, &cache_line)) {
+		req->info.mapping_error = 1;
+		return;
+	}
+
+	ocf_metadata_add_to_partition(cache, req->part_id, cache_line);
+
+	ocf_map_cache_line(req, idx, cache_line);
+
 }
 
 static void ocf_engine_map_hndl_error(struct ocf_cache *cache,
@@ -328,8 +354,6 @@ static void ocf_engine_map(struct ocf_request *req)
 	uint32_t i;
 	struct ocf_map_info *entry;
 	uint64_t core_line;
-	int status = LOOKUP_MAPPED;
-	ocf_core_id_t core_id = ocf_core_get_id(req->core);
 
 	if (!ocf_engine_unmapped_count(req))
 		return;
@@ -349,11 +373,8 @@ static void ocf_engine_map(struct ocf_request *req)
 			core_line <= req->core_line_last; core_line++, i++) {
 		entry = &(req->map[i]);
 
-		ocf_engine_lookup_map_entry(cache, entry, core_id, core_line);
-
 		if (entry->status != LOOKUP_HIT) {
-			ocf_engine_map_cache_line(req, entry->core_line,
-					entry->hash, &entry->coll_idx);
+			ocf_engine_map_cache_line(req, i);
 
 			if (req->info.mapping_error) {
 				/*
@@ -365,7 +386,7 @@ static void ocf_engine_map(struct ocf_request *req)
 				break;
 			}
 
-			entry->status = status;
+			entry->status = LOOKUP_MAPPED;
 		}
 
 		OCF_DEBUG_PARAM(req->cache,
@@ -374,7 +395,6 @@ static void ocf_engine_map(struct ocf_request *req)
 			entry->coll_idx, entry->core_line);
 
 		ocf_engine_update_req_info(cache, req, i);
-
 	}
 
 	if (!req->info.mapping_error) {
@@ -412,35 +432,30 @@ static void _ocf_engine_clean_end(void *private_data, int error)
 
 static int ocf_engine_evict(struct ocf_request *req)
 {
-	if (!ocf_engine_unmapped_count(req))
-		return 0;
-
-	return space_managment_evict_do(req->cache, req,
-			ocf_engine_unmapped_count(req));
+	return space_managment_evict_do(req);
 }
 
-static int lock_clines(struct ocf_request *req,
-		const struct ocf_engine_callbacks *engine_cbs)
+static int _lock_clines(struct ocf_request *req)
 {
-	enum ocf_engine_lock_type lock_type = engine_cbs->get_lock_type(req);
+	enum ocf_engine_lock_type lock_type =
+		req->engine_cbs->get_lock_type(req);
 
 	switch (lock_type) {
 	case ocf_engine_lock_write:
-		return ocf_req_async_lock_wr(req, engine_cbs->resume);
+		return ocf_req_async_lock_wr(req, req->engine_cbs->resume);
 	case ocf_engine_lock_read:
-		return ocf_req_async_lock_rd(req, engine_cbs->resume);
+		return ocf_req_async_lock_rd(req, req->engine_cbs->resume);
 	default:
 		return OCF_LOCK_ACQUIRED;
 	}
 }
 
-int ocf_engine_prepare_clines(struct ocf_request *req,
-		const struct ocf_engine_callbacks *engine_cbs)
+int ocf_engine_prepare_clines(struct ocf_request *req)
 {
+	ocf_cache_t cache = req->cache;
 	bool mapped;
 	bool promote = true;
 	int lock = -ENOENT;
-	struct ocf_metadata_lock *metadata_lock = &req->cache->metadata.lock;
 
 	/* Calculate hashes for hash-bucket locking */
 	ocf_req_hash(req);
@@ -457,7 +472,7 @@ int ocf_engine_prepare_clines(struct ocf_request *req,
 	if (mapped) {
 		/* Request cachelines are already mapped, acquire cacheline
 		 * lock */
-		lock = lock_clines(req, engine_cbs);
+		lock = _lock_clines(req);
 	} else {
 		/* check if request should promote cachelines */
 		promote = ocf_promotion_req_should_promote(
@@ -474,28 +489,25 @@ int ocf_engine_prepare_clines(struct ocf_request *req,
 		 * performed holding (at least) hash-bucket write lock */
 		ocf_req_hash_lock_upgrade(req);
 		ocf_engine_map(req);
-		if (!req->info.mapping_error)
-			lock = lock_clines(req, engine_cbs);
-		ocf_req_hash_unlock_wr(req);
-
-		if (req->info.mapping_error) {
-			/* Not mapped - evict cachelines under global exclusive
-			 * lock*/
-			ocf_metadata_start_exclusive_access(metadata_lock);
-
-			/* Now there is exclusive access for metadata. May
-			 * traverse once again and evict cachelines if needed.
-			 */
-			if (ocf_engine_evict(req) == LOOKUP_MAPPED)
-				ocf_engine_map(req);
-
-			if (!req->info.mapping_error)
-				lock = lock_clines(req, engine_cbs);
-
-			ocf_metadata_end_exclusive_access(metadata_lock);
+		if (!req->info.mapping_error) {
+			lock = _lock_clines(req);
+			ocf_req_hash_unlock_wr(req);
+			return lock;
 		}
-	}
 
+		req->info.mapping_error = false;
+		ocf_engine_evict(req);
+
+		if (!req->info.mapping_error) {
+			ocf_promotion_req_purge(cache->promotion_policy, req);
+			lock = _lock_clines(req);
+		} else {
+			ocf_req_unlock(req);
+			ocf_engine_map_hndl_error(req->cache, req);
+		}
+			
+		ocf_req_hash_unlock_wr(req);
+	}
 
 	return lock;
 }
@@ -540,7 +552,7 @@ void ocf_engine_clean(struct ocf_request *req)
 			.cmpl_context = req,
 			.cmpl_fn = _ocf_engine_clean_end,
 
-			.getter = _ocf_engine_clean_getter,
+			.get = _ocf_engine_clean_getter,
 			.getter_context = &attribs,
 			.getter_item = 0,
 

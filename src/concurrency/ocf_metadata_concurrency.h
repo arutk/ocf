@@ -50,16 +50,20 @@ static inline void ocf_metadata_eviction_unlock_all(
 		ocf_metadata_eviction_unlock(metadata_lock, i);
 }
 
+#define _OCF_METADATA_EVICTION_LOCK(list_no) \
+	ocf_metadata_eviction_lock(&cache->metadata.lock, list_no)
+
+#define _OCF_METADATA_EVICTION_UNLOCK(list_no) \
+	ocf_metadata_eviction_unlock(&cache->metadata.lock, list_no)
+
 #define OCF_METADATA_EVICTION_NUM_LOCKS \
 		(cache->num_evps)
 
 #define OCF_METADATA_EVICTION_LOCK(cline) \
-		ocf_metadata_eviction_lock(&cache->metadata.lock, \
-				cline % OCF_METADATA_EVICTION_NUM_LOCKS)
+	_OCF_METADATA_EVICTION_LOCK(cline % OCF_METADATA_EVICTION_NUM_LOCKS)
 
 #define OCF_METADATA_EVICTION_UNLOCK(cline) \
-		ocf_metadata_eviction_unlock(&cache->metadata.lock, \
-				cline % OCF_METADATA_EVICTION_NUM_LOCKS)
+	_OCF_METADATA_EVICTION_UNLOCK(cline % OCF_METADATA_EVICTION_NUM_LOCKS)
 
 #define OCF_METADATA_EVICTION_LOCK_ALL() \
 	ocf_metadata_eviction_lock_all(&cache->metadata.lock)
@@ -136,10 +140,27 @@ void ocf_metadata_hash_lock_rd(struct ocf_metadata_lock *metadata_lock,
 		uint32_t core_id, uint64_t core_line);
 void ocf_metadata_hash_unlock_rd(struct ocf_metadata_lock *metadata_lock,
 		uint32_t core_id, uint64_t core_line);
+
+/* caller must hold global metadata read lock */
+bool _ocf_metadata_hash_trylock_rd(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line);
+void _ocf_metadata_hash_unlock_rd(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line);
+
 void ocf_metadata_hash_lock_wr(struct ocf_metadata_lock *metadata_lock,
 		uint32_t core_id, uint64_t core_line);
 void ocf_metadata_hash_unlock_wr(struct ocf_metadata_lock *metadata_lock,
 		uint32_t core_id, uint64_t core_line);
+
+/* caller must hold global metadata read lock */
+bool _ocf_metadata_hash_trylock_wr(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line);
+void _ocf_metadata_hash_unlock_wr(struct ocf_metadata_lock *metadata_lock,
+		uint32_t core_id, uint64_t core_line);
+
+/* TODO: find better place for this */
+bool ocf_req_hash_in_range(struct ocf_request *req,
+		ocf_core_id_t core_id, uint64_t core_line);
 
 /* lock entire request in deadlock-free manner */
 void ocf_req_hash_lock_rd(struct ocf_request *req);
