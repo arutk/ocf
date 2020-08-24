@@ -988,9 +988,11 @@ void ocf_req_unlock_rd(struct ocf_request *req)
 			continue;
 		}
 
+		if (!req->map[i].rd_locked)
+			continue;
+
 		line = req->map[i].coll_idx;
 
-		ENV_BUG_ON(!req->map[i].rd_locked);
 		ENV_BUG_ON(line >= req->cache->device->collision_table_entries);
 
 		__unlock_cache_line_rd(c, line);
@@ -1016,9 +1018,11 @@ void ocf_req_unlock_wr(struct ocf_request *req)
 			continue;
 		}
 
+		if (!req->map[i].wr_locked)
+			continue;
+
 		line = req->map[i].coll_idx;
 
-		ENV_BUG_ON(!req->map[i].wr_locked);
 		ENV_BUG_ON(line >= req->cache->device->collision_table_entries);
 
 		__unlock_cache_line_wr(c, line);
@@ -1055,8 +1059,6 @@ void ocf_req_unlock(struct ocf_request *req)
 		} else if (req->map[i].wr_locked) {
 			__unlock_cache_line_wr(c, line);
 			req->map[i].wr_locked = false;
-		} else {
-			ENV_BUG();
 		}
 	}
 }
