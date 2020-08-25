@@ -97,36 +97,32 @@ static inline void _ocf_write_wt_submit(struct ocf_request *req)
 
 static void _ocf_write_wt_update_bits(struct ocf_request *req)
 {
-	if (ocf_engine_is_miss(req)) {
-		ocf_req_hash_lock_rd(req);
+	bool miss = ocf_engine_is_miss(req);
+	bool dirty_any = req->info.dirty_any;
+	bool re_part = req->info.re_part;
 
-		/* Update valid status bits */
-		ocf_set_valid_map_info(req);
-
-		ocf_req_hash_unlock_rd(req);
-	}
-
-	if (req->info.dirty_any) {
+	if (miss || dirty_any || re_part) {
 		ocf_req_hash_lock_wr(req);
 
-		/* Writes goes to SDD and HDD, need to update status bits from
-		 * dirty to clean
-		 */
+		if (miss) {
+			/* Update valid status bits */
+			ocf_set_valid_map_info(req);
+		}
 
-		ocf_set_clean_map_info(req);
+		if (dirty_any) {
+			/* Writes goes to SDD and HDD, need to update status bits from
+			 * dirty to clean
+			 */
+			ocf_set_clean_map_info(req);
+		}
 
-		ocf_req_hash_unlock_wr(req);
-	}
-
-	if (req->info.re_part) {
-		OCF_DEBUG_RQ(req, "Re-Part");
-
-		ocf_req_hash_lock_wr(req);
-
-		/* Probably some cache lines are assigned into wrong
-		 * partition. Need to move it to new one
-		 */
-		ocf_part_move(req);
+		if (re_part) {
+			/* Probably some cache lines are assigned into wrong
+			 * partition. Need to move it to new one
+			 */
+			OCF_DEBUG_RQ(req, "Re-Part");
+			ocf_part_move(req);
+		}
 
 		ocf_req_hash_unlock_wr(req);
 	}

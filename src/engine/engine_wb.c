@@ -26,21 +26,23 @@ static const struct ocf_io_if _io_if_wb_resume = {
 
 static void _ocf_write_wb_update_bits(struct ocf_request *req)
 {
-	if (ocf_engine_is_miss(req)) {
-		ocf_req_hash_lock_rd(req);
-		/* Update valid status bits */
-		ocf_set_valid_map_info(req);
+	bool miss = ocf_engine_is_miss(req);
+	bool dirty_all = ocf_engine_is_dirty_all(req);
+
+	if (miss || !dirty_all) {
+		ocf_req_hash_lock_wr(req);
+		
+		if (miss) {
+			/* Update valid status bits */
+			ocf_set_valid_map_info(req);
+		}
+
+		if (!dirty_all) {
+			/* set dirty bits, and mark if metadata flushing is required */
+			ocf_set_dirty_map_info(req);
+		}
 
 		ocf_req_hash_unlock_rd(req);
-	}
-
-	if (!ocf_engine_is_dirty_all(req)) {
-		ocf_req_hash_lock_wr(req);
-
-		/* set dirty bits, and mark if metadata flushing is required */
-		ocf_set_dirty_map_info(req);
-
-		ocf_req_hash_unlock_wr(req);
 	}
 }
 

@@ -137,7 +137,10 @@ err_alloc:
 
 static int _ocf_read_generic_do(struct ocf_request *req)
 {
-	if (ocf_engine_is_miss(req) && req->map->rd_locked) {
+	bool miss = ocf_engine_is_miss(req);
+	bool re_part = req->info.re_part;
+
+	if (miss && req->map->rd_locked) {
 		/* Miss can be handled only on write locks.
 		 * Need to switch to PT
 		 */
@@ -149,38 +152,35 @@ static int _ocf_read_generic_do(struct ocf_request *req)
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
 
-	if (ocf_engine_is_miss(req)) {
-		if (req->info.dirty_any) {
-			ocf_req_hash_lock_rd(req);
-
-			/* Request is dirty need to clean request */
-			ocf_engine_clean(req);
-
-			ocf_req_hash_unlock_rd(req);
-
-			/* We need to clean request before processing, return */
-			ocf_req_put(req);
-
-			return 0;
-		}
-
+	if (miss && req->info.dirty_any) {
 		ocf_req_hash_lock_rd(req);
 
-		/* Set valid status bits map */
-		ocf_set_valid_map_info(req);
+		/* Request is dirty need to clean request */
+		ocf_engine_clean(req);
 
 		ocf_req_hash_unlock_rd(req);
+
+		/* We need to clean request before processing, return */
+		ocf_req_put(req);
+
+		return 0;
 	}
 
-	if (req->info.re_part) {
-		OCF_DEBUG_RQ(req, "Re-Part");
-
+	if (miss || re_part) {
 		ocf_req_hash_lock_wr(req);
 
-		/* Probably some cache lines are assigned into wrong
-		 * partition. Need to move it to new one
-		 */
-		ocf_part_move(req);
+		if (miss) {
+			/* Set valid status bits map */
+			ocf_set_valid_map_info(req);
+		}
+
+		if (re_part) {
+			/* Probably some cache lines are assigned into wrong
+			 * partition. Need to move it to new one
+			 */
+			OCF_DEBUG_RQ(req, "Re-Part");
+			ocf_part_move(req);
+		}
 
 		ocf_req_hash_unlock_wr(req);
 	}
