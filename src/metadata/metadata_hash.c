@@ -108,6 +108,10 @@ static ocf_cache_line_t ocf_metadata_hash_get_entries(
 	case metadata_segment_core_uuid:
 		return OCF_CORE_MAX;
 
+	case metadata_segment_eviction_runtime:
+		return (OCF_IO_CLASS_MAX + 1) * EVICTION_MAX_PARTS;
+		break;
+
 	default:
 		break;
 	}
@@ -265,6 +269,7 @@ static const char * const ocf_metadata_hash_raw_names[] = {
 		[metadata_segment_core_config]		= "Core config",
 		[metadata_segment_core_runtime]		= "Core runtime",
 		[metadata_segment_core_uuid]		= "Core UUID",
+		[metadata_segment_eviction_runtime]	= "Eviction runtime",
 };
 #if 1 == OCF_METADATA_HASH_DEBUG
 /*
@@ -484,8 +489,16 @@ int ocf_metadata_hash_init(struct ocf_cache *cache,
 	part_runtime = METADATA_MEM_POOL(ctrl, metadata_segment_part_runtime);
 
 	for (i = 0; i < OCF_IO_CLASS_MAX + 1; i++) {
+		unsigned j;
+
 		cache->user_parts[i].config = &part_config[i];
 		cache->user_parts[i].runtime = &part_runtime[i];
+
+		for (j = 0; j < EVICTION_MAX_PARTS; j++) {
+			cache->user_parts[i].eviction[j] = 
+				ocf_metadata_hash_get_eviction(cache,
+						i, j);
+		}
 	}
 
 	/* Set core metadata */
@@ -1326,6 +1339,7 @@ struct ocf_pipeline_arg ocf_metadata_hash_load_sb_load_segment_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_part_runtime),
 	OCF_PL_ARG_INT(metadata_segment_core_config),
 	OCF_PL_ARG_INT(metadata_segment_core_uuid),
+	OCF_PL_ARG_INT(metadata_segment_eviction_runtime),
 	OCF_PL_ARG_TERMINATOR(),
 };
 
@@ -1335,6 +1349,7 @@ struct ocf_pipeline_arg ocf_metadata_hash_load_sb_check_crc_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_part_runtime),
 	OCF_PL_ARG_INT(metadata_segment_core_config),
 	OCF_PL_ARG_INT(metadata_segment_core_uuid),
+	OCF_PL_ARG_INT(metadata_segment_eviction_runtime),
 	OCF_PL_ARG_TERMINATOR(),
 };
 
@@ -1477,6 +1492,7 @@ struct ocf_pipeline_arg ocf_metadata_hash_flush_sb_calculate_crc_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_part_config),
 	OCF_PL_ARG_INT(metadata_segment_core_config),
 	OCF_PL_ARG_INT(metadata_segment_core_uuid),
+	OCF_PL_ARG_INT(metadata_segment_eviction_runtime),
 	OCF_PL_ARG_TERMINATOR(),
 };
 
@@ -1485,6 +1501,7 @@ struct ocf_pipeline_arg ocf_metadata_hash_flush_sb_flush_segment_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_part_config),
 	OCF_PL_ARG_INT(metadata_segment_core_config),
 	OCF_PL_ARG_INT(metadata_segment_core_uuid),
+	OCF_PL_ARG_INT(metadata_segment_eviction_runtime),
 	OCF_PL_ARG_TERMINATOR(),
 };
 
@@ -2192,6 +2209,22 @@ struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
 	return muuid;
 }
 
+struct eviction_policy *ocf_metadata_hash_get_eviction(
+		struct ocf_cache *cache, ocf_part_id_t part_id,
+		unsigned ev_no)
+{
+	struct eviction_policy *eviction;
+
+	struct ocf_metadata_hash_ctrl *ctrl =
+		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+
+	eviction = ocf_metadata_raw_wr_access(cache,
+			&(ctrl->raw_desc[metadata_segment_eviction_runtime]),
+			part_id * EVICTION_MAX_PARTS + ev_no);
+
+	return eviction;
+}
+
 /*******************************************************************************
  * Core and part id
  ******************************************************************************/
@@ -2744,6 +2777,10 @@ static int64_t ocf_metadata_hash_get_element_size(
 
 	case metadata_segment_core_uuid:
 		size = sizeof(struct ocf_metadata_uuid);
+		break;
+
+	case metadata_segment_eviction_runtime:
+		size = sizeof(struct eviction_policy);
 		break;
 
 	default:

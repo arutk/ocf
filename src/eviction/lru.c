@@ -278,8 +278,8 @@ void evp_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 			cache->device->collision_table_entries;
 
 	list = metadata_test_dirty(cache, cline) ? 
-		&part->runtime->eviction[ev_part].policy.lru.dirty :
-		&part->runtime->eviction[ev_part].policy.lru.clean;
+		&part->eviction[ev_part]->policy.lru.dirty :
+		&part->eviction[ev_part]->policy.lru.clean;
 
 	remove_lru_list(cache, list, cline, end_marker);
 	balance_lru_list(cache, list, end_marker);
@@ -438,8 +438,8 @@ static inline ocf_cache_line_t lru_iter_next(struct ocf_lru_iter_state *state,
 		_OCF_METADATA_EVICTION_LOCK(curr_evp);
 
 		list = state->clean ?
-			&part->runtime->eviction[curr_evp].policy.lru.clean :
-			&part->runtime->eviction[curr_evp].policy.lru.dirty;
+			&part->eviction[curr_evp]->policy.lru.clean :
+			&part->eviction[curr_evp]->policy.lru.dirty;
 
 		cline = list->tail;
 
@@ -618,7 +618,7 @@ static bool dirty_pages_present(ocf_cache_t cache, ocf_part_id_t part_id)
 
 
 	for (i = 0; i < cache->num_evps; i++) {
-		if (part->runtime->eviction[i].policy.lru.dirty.tail !=
+		if (part->eviction[i]->policy.lru.dirty.tail !=
 				cache->device->collision_table_entries) {
 			return true;
 		}
@@ -767,8 +767,8 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	cline_dirty = metadata_test_dirty(cache, cline);
 	list = cline_dirty ? 
-		&part->runtime->eviction[ev_part].policy.lru.dirty :
-		&part->runtime->eviction[ev_part].policy.lru.clean;
+		&part->eviction[ev_part]->policy.lru.dirty :
+		&part->eviction[ev_part]->policy.lru.clean;
 
 	if (node->next != end_marker ||
 			node->prev != end_marker ||
@@ -804,8 +804,8 @@ void evp_lru_init_evp(ocf_cache_t cache, ocf_part_id_t part_id,
 	unsigned i;
 
 	for (i = 0; i < cache->num_evps; i++) {
-		clean_list = &part->runtime->eviction[i].policy.lru.clean;
-		dirty_list = &part->runtime->eviction[i].policy.lru.dirty;
+		clean_list = &part->eviction[i]->policy.lru.clean;
+		dirty_list = &part->eviction[i]->policy.lru.dirty;
 
 		_lru_init(clean_list, end_marker);
 		_lru_init(dirty_list, end_marker);
@@ -822,8 +822,8 @@ void evp_lru_clean_cline(ocf_cache_t cache, ocf_part_id_t part_id,
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
 
-	clean_list = &part->runtime->eviction[ev_part].policy.lru.clean;
-	dirty_list = &part->runtime->eviction[ev_part].policy.lru.dirty;
+	clean_list = &part->eviction[ev_part]->policy.lru.clean;
+	dirty_list = &part->eviction[ev_part]->policy.lru.dirty;
 
 	OCF_METADATA_EVICTION_LOCK(cline);
 	remove_lru_list(cache, dirty_list, cline, end_marker);
@@ -843,8 +843,8 @@ void evp_lru_dirty_cline(ocf_cache_t cache, ocf_part_id_t part_id,
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
 
-	clean_list = &part->runtime->eviction[ev_part].policy.lru.clean;
-	dirty_list = &part->runtime->eviction[ev_part].policy.lru.dirty;
+	clean_list = &part->eviction[ev_part]->policy.lru.clean;
+	dirty_list = &part->eviction[ev_part]->policy.lru.dirty;
 
 	OCF_METADATA_EVICTION_LOCK(cline);
 	remove_lru_list(cache, clean_list, cline, end_marker);

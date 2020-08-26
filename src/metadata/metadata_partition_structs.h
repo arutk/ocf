@@ -29,7 +29,6 @@ struct ocf_user_part_config {
 struct ocf_user_part_runtime {
         uint32_t curr_size;
         uint32_t head;
-        struct eviction_policy eviction[EVICTION_MAX_PARTS];
         struct cleaning_policy cleaning;
 };
 
@@ -65,6 +64,7 @@ struct ocf_part_cleaning_ctx {
 struct ocf_user_part {
         struct ocf_user_part_config *config;
         struct ocf_user_part_runtime *runtime;
+	struct eviction_policy *eviction[EVICTION_MAX_PARTS];
 
 	struct ocf_part_cleaning_ctx cleaning;
 

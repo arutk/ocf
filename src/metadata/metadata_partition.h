@@ -18,6 +18,11 @@ void ocf_metadata_hash_get_partition_info(
 		ocf_part_id_t *part_id, ocf_cache_line_t *next_line,
 		ocf_cache_line_t *prev_line);
 
+/* TODOL find a better place for this */
+struct eviction_policy *ocf_metadata_hash_get_eviction(
+		struct ocf_cache *cache, ocf_part_id_t part_id,
+		unsigned ev_no);
+
 static inline ocf_part_id_t ocf_metadata_hash_get_partition_id(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
