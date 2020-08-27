@@ -26,8 +26,6 @@ struct ocf_metadata_uuid {
 #define OCF_CORE_USER_DATA_SIZE 64
 
 struct ocf_core_meta_config {
-	char name[OCF_CORE_NAME_SIZE];
-
 	uint8_t type;
 
 	/* This bit means that object was saved in cache metadata */
@@ -47,7 +45,8 @@ struct ocf_core_meta_config {
 	uint64_t length;
 
 	uint8_t user_data[OCF_CORE_USER_DATA_SIZE];
-};
+	char name[OCF_CORE_NAME_SIZE];
+} __attribute__ ((aligned (8)));;
 
 struct ocf_core_meta_runtime {
 	/* Number of blocks from that objects that currently are cached
@@ -66,8 +65,8 @@ struct ocf_core_meta_runtime {
 		 * cache device
 		 */
 		env_atomic dirty_clines;
-	} part_counters[OCF_IO_CLASS_MAX];
-};
+	} __attribute__ ((aligned (8))) part_counters[OCF_IO_CLASS_MAX];
+} __attribute__ ((aligned (8))); 
 
 
 struct ocf_core {

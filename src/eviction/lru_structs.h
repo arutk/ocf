@@ -19,7 +19,7 @@ struct ocf_lru_list {
 	uint32_t tail;
 	uint32_t num_hot;
 	uint32_t last_hot;
-};
+} __attribute__ ((aligned (64)));;
 
 struct lru_eviction_policy {
 	struct ocf_lru_list clean;

@@ -11,7 +11,6 @@
 #include "../eviction/eviction.h"
 
 struct ocf_user_part_config {
-        char name[OCF_IO_CLASS_NAME_MAX];
         uint32_t min_size;
         uint32_t max_size;
         int16_t priority;
@@ -24,13 +23,15 @@ struct ocf_user_part_config {
                          * and means that can evict from this partition
                          */
         } flags;
-};
+
+        char name[OCF_IO_CLASS_NAME_MAX];
+} __attribute__ ((aligned (8)));;
 
 struct ocf_user_part_runtime {
         uint32_t curr_size;
         uint32_t head;
         struct cleaning_policy cleaning;
-};
+} __attribute__ ((aligned (8)));;
 
 typedef bool ( *_lru_hash_locked_pfn)(void *context,
 		ocf_core_id_t core_id, uint64_t core_line);
