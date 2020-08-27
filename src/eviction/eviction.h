@@ -14,13 +14,13 @@
 #define OCF_TO_EVICTION_MIN 0UL
 #define OCF_PENDING_EVICTION_LIMIT 512UL
 
-#define EVICTION_MAX_PARTS 24U
+#define EVICTION_MAX_PARTS 128U
 
 struct eviction_policy {
 	union {
 		struct lru_eviction_policy lru;
 	} policy;
-};
+} __attribute__ ((aligned (64)));
 
 /* Eviction policy metadata per cache line */
 union eviction_policy_meta {
