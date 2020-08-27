@@ -2135,6 +2135,16 @@ static void ocf_metadata_hash_load_recovery(ocf_cache_t cache,
 		_ocf_metadata_hash_load_recovery_legacy(cache, cmpl, priv);
 }
 
+static inline struct ocf_metadata_cacheline* ocf_get_cacheline_meta(
+		struct ocf_cache *cache, ocf_cache_line_t line)
+{
+	struct ocf_metadata_hash_ctrl *ctrl =
+		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	return ocf_metadata_raw_rd_access(cache,
+			&(ctrl->raw_desc[metadata_segment_cacheline]),
+			line);
+}
+
 /*******************************************************************************
  * Core Info
  ******************************************************************************/
@@ -2142,61 +2152,31 @@ void ocf_metadata_hash_get_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t *core_id,
 		uint64_t *core_sector)
 {
-	const struct ocf_metadata_cacheline *meta;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	meta = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
-	if (meta) {
-		if (core_id)
-			*core_id = meta->core_id;
-		if (core_sector)
-			*core_sector = meta->core_line;
-	} else {
-		ocf_metadata_error(cache);
-
-		if (core_id)
-			*core_id = OCF_CORE_MAX;
-		if (core_sector)
-			*core_sector = ULLONG_MAX;
-	}
+	const struct ocf_metadata_cacheline *meta = ocf_get_cacheline_meta(
+			cache, line);
+	if (core_id)
+		*core_id = meta->core_id;
+	if (core_sector)
+		*core_sector = meta->core_line;
 }
 
 void ocf_metadata_hash_set_core_info(struct ocf_cache *cache,
 		ocf_cache_line_t line, ocf_core_id_t core_id,
 		uint64_t core_sector)
 {
-	struct ocf_metadata_cacheline *meta;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	meta = ocf_metadata_raw_wr_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
-
-	if (meta) {
-		meta->core_id = core_id;
-		meta->core_line = core_sector;
-	} else {
-		ocf_metadata_error(cache);
-	}
+	struct ocf_metadata_cacheline *meta = ocf_get_cacheline_meta(
+			cache, line);
+	meta->core_id = core_id;
+	meta->core_line = core_sector;
 }
 
 ocf_core_id_t ocf_metadata_hash_get_core_id(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	const struct ocf_metadata_cacheline *meta;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
+	const struct ocf_metadata_cacheline *meta = ocf_get_cacheline_meta(
+			cache, line);
 
-	meta = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
-
-	if (meta)
-		return meta->core_id;
-
-	ocf_metadata_error(cache);
-	return OCF_CORE_MAX;
+	return meta->core_id;
 }
 
 struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
@@ -2239,12 +2219,8 @@ void ocf_metadata_hash_get_core_and_part_id(
 		struct ocf_cache *cache, ocf_cache_line_t line,
 		ocf_core_id_t *core_id, ocf_part_id_t *part_id)
 {
-	struct ocf_metadata_cacheline *meta;
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	meta = ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line);
+	struct ocf_metadata_cacheline *meta = ocf_get_cacheline_meta(
+			cache, line);
 
 	if (core_id)
 		*core_id = meta->core_id;
@@ -2262,11 +2238,7 @@ void ocf_metadata_hash_get_core_and_part_id(
 ocf_cache_line_t ocf_metadata_hash_get_hash(
 		struct ocf_cache *cache, ocf_cache_line_t index)
 {
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	return 	((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), index))->hash;
+	return ocf_get_cacheline_meta(cache, index)->hash;
 }
 
 /*
@@ -2275,11 +2247,7 @@ ocf_cache_line_t ocf_metadata_hash_get_hash(
 void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 		ocf_cache_line_t index, ocf_cache_line_t line)
 {
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), index))->hash = line;
+	ocf_get_cacheline_meta(cache, index)->hash = line;
 }
 
 /*******************************************************************************
@@ -2292,11 +2260,7 @@ void ocf_metadata_hash_set_hash(struct ocf_cache *cache,
 struct cleaning_policy_meta *
 ocf_metadata_hash_get_cleaning_policy_meta(struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	return &((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line))->cleaning;
+	return &ocf_get_cacheline_meta(cache, line)->cleaning;
 }
 
 /*******************************************************************************
@@ -2310,11 +2274,7 @@ union eviction_policy_meta *
 ocf_metadata_hash_get_eviction_policy(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	struct ocf_metadata_hash_ctrl *ctrl
-		= (struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-
-	return &((struct ocf_metadata_cacheline *)ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]), line))->eviction;
+	return &ocf_get_cacheline_meta(cache, line)->eviction;
 }
 
 /*******************************************************************************
@@ -2389,16 +2349,6 @@ static ocf_cache_line_t ocf_metadata_hash_map_phy2lg_striping(
 	coll_idx = (row * entries_in_page) + coll;
 
 	return coll_idx;
-}
-
-static struct ocf_metadata_cacheline* ocf_get_cacheline_meta(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	struct ocf_metadata_hash_ctrl *ctrl =
-		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-	return ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_cacheline]),
-			line);
 }
 
 static inline struct ocf_metadata_list_info *get_list_info(
