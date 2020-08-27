@@ -137,6 +137,7 @@ void ocf_engine_update_req_info(struct ocf_cache *cache,
 		req->info.seq_req = false;
 		break;
 	case LOOKUP_MAPPED:
+	case LOOKUP_REPLACED:
 		break;
 	default:
 		ENV_BUG();
@@ -298,6 +299,7 @@ static void ocf_engine_map_hndl_error(struct ocf_cache *cache,
 			break;
 
 		case LOOKUP_MAPPED:
+		case LOOKUP_REPLACED:
 			OCF_DEBUG_RQ(req, "Canceling cache line %u",
 					entry->coll_idx);
 
