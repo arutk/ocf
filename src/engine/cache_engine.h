@@ -9,6 +9,7 @@
 struct ocf_thread_priv;
 struct ocf_request;
 
+#define LOOKUP_REPLACED 4
 #define LOOKUP_HIT 5
 #define LOOKUP_MISS 6
 #define LOOKUP_MAPPED 8

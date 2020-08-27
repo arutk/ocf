@@ -731,7 +731,7 @@ static int _ocf_req_trylock_rd(struct ocf_request *req)
 	ENV_BUG_ON(env_atomic_read(&req->lock_remaining));
 
 	for (i = 0; i < req->core_line_count; i++) {
-		if (req->map[i].status == LOOKUP_MISS) {
+		if (req->map[i].status <= LOOKUP_MISS) {
 			/* MISS nothing to lock */
 			continue;
 		}
@@ -756,6 +756,11 @@ static int _ocf_req_trylock_rd(struct ocf_request *req)
 	if (ret == OCF_LOCK_NOT_ACQUIRED) {
 		/* Request is not locked, discard acquired locks */
 		for (; i >= 0; i--) {
+			if (req->map[i].status <= LOOKUP_MISS) {
+				/* MISS nothing to lock */
+				continue;
+			}
+
 			line = req->map[i].coll_idx;
 
 			if (req->map[i].rd_locked) {
@@ -788,7 +793,7 @@ static int _ocf_req_lock_rd(struct ocf_request *req, ocf_req_async_lock_cb cb)
 
 	for (i = 0; i < req->core_line_count; i++) {
 
-		if (req->map[i].status == LOOKUP_MISS) {
+		if (req->map[i].status <= LOOKUP_MISS) {
 			/* MISS nothing to lock */
 			env_atomic_dec(&req->lock_remaining);
 			continue;
@@ -815,6 +820,9 @@ static int _ocf_req_lock_rd(struct ocf_request *req, ocf_req_async_lock_cb cb)
 
 err:
 	for (; i >= 0; i--) {
+		if (req->map[i].status <= LOOKUP_MISS) {
+			continue;
+		}
 		__remove_line_from_waiters_list(c, req, i, req,
 				OCF_READ);
 	}
@@ -858,7 +866,7 @@ static int _ocf_req_trylock_wr(struct ocf_request *req)
 	ENV_BUG_ON(env_atomic_read(&req->lock_remaining));
 
 	for (i = 0; i < req->core_line_count; i++) {
-		if (req->map[i].status == LOOKUP_MISS) {
+		if (req->map[i].status <= LOOKUP_MISS) {
 			/* MISS nothing to lock */
 			continue;
 		}
@@ -883,6 +891,10 @@ static int _ocf_req_trylock_wr(struct ocf_request *req)
 	if (ret == OCF_LOCK_NOT_ACQUIRED) {
 		/* Request is not locked, discard acquired locks */
 		for (; i >= 0; i--) {
+			if (req->map[i].status <= LOOKUP_MISS) {
+				continue;
+			}
+
 			line = req->map[i].coll_idx;
 
 			if (req->map[i].wr_locked) {
@@ -916,7 +928,7 @@ static int _ocf_req_lock_wr(struct ocf_request *req, ocf_req_async_lock_cb cb)
 
 	for (i = 0; i < req->core_line_count; i++) {
 
-		if (req->map[i].status == LOOKUP_MISS) {
+		if (req->map[i].status <= LOOKUP_MISS) {
 			/* MISS nothing to lock */
 			env_atomic_dec(&req->lock_remaining);
 			continue;
@@ -943,6 +955,9 @@ static int _ocf_req_lock_wr(struct ocf_request *req, ocf_req_async_lock_cb cb)
 
 err:
 	for (; i >= 0; i--) {
+		if (req->map[i].status <= LOOKUP_MISS) {
+			continue;
+		}
 		__remove_line_from_waiters_list(c, req, i, req,
 				OCF_WRITE);
 	}
