@@ -96,8 +96,6 @@ struct ocf_cache_device {
 struct ocf_cache {
 	ocf_ctx_t owner;
 
-	struct list_head list;
-
 	/* unset running to not serve any more I/O requests */
 	unsigned long cache_state;
 
@@ -105,13 +103,11 @@ struct ocf_cache {
 
 	struct ocf_cache_device *device;
 
-	struct ocf_lst lst_part;
 	struct ocf_user_part user_parts[OCF_IO_CLASS_MAX + 1];
+
 	unsigned num_evps;
 
 	struct ocf_metadata metadata;
-
-	ocf_freelist_t freelist;
 
 	ocf_eviction_t eviction_policy_init;
 
@@ -133,30 +129,17 @@ struct ocf_cache {
 	env_atomic pending_read_misses_list_blocked;
 	env_atomic pending_read_misses_list_count;
 
+	/* TODO: make percpu */
 	env_atomic last_access_ms;
-
-	env_atomic pending_eviction_clines;
 
 	struct list_head io_queues;
 	ocf_queue_t mngt_queue;
 
-	uint16_t ocf_core_inactive_count;
 	struct ocf_core core[OCF_CORE_MAX];
-
-	env_atomic flush_in_progress;
 
 	struct ocf_cleaner cleaner;
 	struct ocf_metadata_updater metadata_updater;
 	ocf_promotion_policy_t promotion_policy;
-
-	struct ocf_async_lock lock;
-
-	/*
-	 * Most of the time this variable is set to 0, unless user requested
-	 * interruption of flushing process.
-	 */
-	int flushing_interrupted;
-	env_mutex flush_mutex;
 
 	struct {
 		uint32_t max_queue_size;
@@ -167,11 +150,29 @@ struct ocf_cache {
 
 	bool use_submit_io_fast;
 
-	struct ocf_trace trace;
-
-	ocf_pipeline_t stop_pipeline;
 
 	void *priv;
+
+	/* === rarely used ========*/
+
+	struct ocf_lst lst_part;
+	struct list_head list;
+	env_atomic pending_eviction_clines;
+	uint16_t ocf_core_inactive_count;
+
+	env_atomic flush_in_progress;
+	struct ocf_async_lock lock;
+
+	/*
+	 * Most of the time this variable is set to 0, unless user requested
+	 * interruption of flushing process.
+	 */
+	int flushing_interrupted;
+	env_mutex flush_mutex;
+
+	struct ocf_trace trace;
+	ocf_pipeline_t stop_pipeline;
+	ocf_freelist_t freelist;
 };
 
 static inline ocf_core_t ocf_cache_get_core(ocf_cache_t cache,

@@ -92,7 +92,7 @@ struct ocf_core {
 	struct ocf_counters_core /* __percpu */  *counters;
 
 	void *priv;
-};
+}  __attribute__ ((aligned (8)));  
 
 bool ocf_core_is_valid(ocf_cache_t cache, ocf_core_id_t id);
 
