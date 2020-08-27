@@ -8,19 +8,6 @@
 #include "../utils/utils_part.h"
 #include "../engine/engine_common.h"
 
-struct eviction_policy_ops evict_policy_ops[ocf_eviction_max] = {
-	[ocf_eviction_lru] = {
-		.init_cline = evp_lru_init_cline,
-		.rm_cline = evp_lru_rm_cline,
-		.req_clines = evp_lru_req_clines,
-		.hot_cline = evp_lru_hot_cline,
-		.init_evp = evp_lru_init_evp,
-		.dirty_cline = evp_lru_dirty_cline,
-		.clean_cline = evp_lru_clean_cline,
-		.name = "lru",
-	},
-};
-
 static uint32_t ocf_evict_calculate(struct ocf_user_part *part,
 		uint32_t to_evict)
 {
@@ -53,10 +40,6 @@ static inline uint32_t ocf_evict_do(struct ocf_request *req)
 
 	/* For each partition from the lowest priority to highest one */
 	for_each_part(cache, part, part_id) {
-
-		if (!ocf_eviction_can_evict(cache))
-			goto out;
-
 		/*
 		 * Check stop and continue conditions
 		 */
@@ -85,18 +68,15 @@ static inline uint32_t ocf_evict_do(struct ocf_request *req)
 			continue;
 		}
 
-		evicted += ocf_eviction_need_space(cache, req,
+		evicted += evp_lru_req_clines(req,
 				part_id, to_evict);
 	}
-
-	if (!ocf_eviction_can_evict(cache))
-		goto out;
 
 	if (evicted < evict_cline_no) {
 		/* Now we can evict form targeted partition */
 		to_evict = ocf_evict_calculate(target_part, evict_cline_no);
 		if (to_evict) {
-			evicted += ocf_eviction_need_space(cache, req,
+			evicted += evp_lru_req_clines(req,
 					target_part_id, to_evict);
 		}
 	}

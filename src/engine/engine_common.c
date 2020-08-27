@@ -198,7 +198,7 @@ void ocf_engine_traverse(struct ocf_request *req)
 				entry->coll_idx, entry->core_line);
 
 		/* Update eviction (LRU) */
-		ocf_eviction_set_hot_cache_line(cache, entry->coll_idx);
+		evp_lru_hot_cline(cache, entry->coll_idx);
 	}
 
 	OCF_DEBUG_PARAM(cache, "Sequential - %s", req->info.seq_req ?
@@ -260,7 +260,6 @@ void ocf_map_cache_line(struct ocf_request *req,
 {
 	ocf_cache_t cache = req->cache;
 	ocf_core_id_t core_id = ocf_core_get_id(req->core);
-	ocf_part_id_t part_id = req->part_id;
 	ocf_cleaning_t clean_policy_type;
 	unsigned int hash_index = req->map[idx].hash;
 	uint16_t status = req->map[idx].status;
@@ -276,8 +275,8 @@ void ocf_map_cache_line(struct ocf_request *req,
 
 	/* Update LRU:: Move this node to head of lru list. */
 	if (status != LOOKUP_REPLACED) {
-		ocf_eviction_init_cache_line(cache, cache_line, part_id);
-		ocf_eviction_set_hot_cache_line(cache, cache_line);
+		evp_lru_init_cline(cache, cache_line);
+		evp_lru_hot_cline(cache, cache_line);
 	}
 
 	/* Update dirty cache-block list */

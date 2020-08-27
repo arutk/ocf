@@ -259,11 +259,15 @@ void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	const uint32_t end_marker =
 			cache->device->collision_table_entries;
 
+	OCF_METADATA_EVICTION_LOCK(cline);
+
 	node = &ocf_metadata_hash_get_eviction_policy(cache, cline)->lru;
 
 	node->hot = false;
 	node->prev = end_marker;
 	node->next = end_marker;
+
+	OCF_METADATA_EVICTION_UNLOCK(cline);
 }
 
 
@@ -277,12 +281,16 @@ void evp_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	const unsigned int end_marker =
 			cache->device->collision_table_entries;
 
+	OCF_METADATA_EVICTION_LOCK(cline);
+
 	list = metadata_test_dirty(cache, cline) ? 
 		&part->eviction[ev_part]->policy.lru.dirty :
 		&part->eviction[ev_part]->policy.lru.clean;
 
 	remove_lru_list(cache, list, cline, end_marker);
 	balance_lru_list(cache, list, end_marker);
+
+	OCF_METADATA_EVICTION_UNLOCK(cline);
 }
 
 static inline void lru_iter_init(ocf_cache_t cache,

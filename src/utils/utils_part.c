@@ -123,7 +123,7 @@ void ocf_part_move(struct ocf_request *req)
 		}
 
 		/* Remove from old eviction */
-		ocf_eviction_purge_cache_line(cache, line);
+		evp_lru_rm_cline(cache, line);
 
 		if (metadata_test_dirty(cache, line)) {
 			/*
@@ -143,8 +143,8 @@ void ocf_part_move(struct ocf_request *req)
 
 
 		/* Add to new eviction */
-		ocf_eviction_init_cache_line(cache, line, id_new);
-		ocf_eviction_set_hot_cache_line(cache, line);
+		evp_lru_init_cline(cache, line);
+		evp_lru_hot_cline(cache, line);
 
 		/* Check if cache line is dirty. If yes then need to change
 		 * cleaning  policy and update partition dirty clines

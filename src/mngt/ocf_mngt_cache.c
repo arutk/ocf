@@ -198,7 +198,7 @@ static void __init_partitions_attached(ocf_cache_t cache)
 				cache->device->collision_table_entries;
 		cache->user_parts[part_id].runtime->curr_size = 0;
 
-		ocf_eviction_initialize(cache, part_id, cache->num_evps);
+		evp_lru_init_evp(cache, part_id, cache->num_evps);
 	}
 }
 
@@ -2037,15 +2037,12 @@ static int _ocf_mngt_cache_load_core_log(ocf_core_t core, void *cntx)
 static void _ocf_mngt_cache_load_log(ocf_cache_t cache)
 {
 	ocf_cache_mode_t cache_mode = ocf_cache_get_mode(cache);
-	ocf_eviction_t eviction_type = cache->conf_meta->eviction_policy_type;
 	ocf_cleaning_t cleaning_type = cache->conf_meta->cleaning_policy_type;
 	ocf_promotion_t promotion_type = cache->conf_meta->promotion_policy_type;
 
 	ocf_cache_log(cache, log_info, "Successfully loaded\n");
 	ocf_cache_log(cache, log_info, "Cache mode : %s\n",
 			_ocf_cache_mode_get_name(cache_mode));
-	ocf_cache_log(cache, log_info, "Eviction policy : %s\n",
-			evict_policy_ops[eviction_type].name);
 	ocf_cache_log(cache, log_info, "Cleaning policy : %s\n",
 			cleaning_policy_ops[cleaning_type].name);
 	ocf_cache_log(cache, log_info, "Promotion policy : %s\n",

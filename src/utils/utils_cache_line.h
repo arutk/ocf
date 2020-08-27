@@ -184,7 +184,7 @@ static inline void ocf_purge_cleaning_policy(struct ocf_cache *cache,
 static inline void ocf_purge_eviction_policy(struct ocf_cache *cache,
 		ocf_cache_line_t line)
 {
-	ocf_eviction_purge_cache_line(cache, line);
+	evp_lru_rm_cline(cache, line);
 }
 
 /**
