@@ -9,7 +9,7 @@
 #include "ocf_env.h"
 
 struct alru_cleaning_policy_meta {
-	/* Lru pointers 2*4=8 bytes */
+	/* Lru pointers 3*4=12 bytes */
 	uint32_t timestamp;
 	uint32_t lru_prev;
 	uint32_t lru_next;

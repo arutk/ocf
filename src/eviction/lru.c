@@ -705,9 +705,8 @@ uint32_t evp_lru_req_clines(struct ocf_request *req,
 		{
 			ocf_part_id_t part_id;
 
-			ocf_metadata_hash_get_partition_info(
-					cache, cline, 
-					&part_id, NULL, NULL);
+			part_id = ocf_metadata_hash_get_partition_id(
+					cache, cline);
 
 			if (req->part_id != part_id) {
 				ocf_metadata_remove_from_partition(

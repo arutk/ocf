@@ -7,7 +7,7 @@
 #define __EVICTION_LRU_STRUCTS_H__
 
 struct lru_eviction_policy_meta {
-	/* LRU pointers 2*4=8 bytes */
+	/* LRU pointers 3*4=12 bytes */
 	uint32_t prev;
 	uint32_t next;
 	uint32_t hot;

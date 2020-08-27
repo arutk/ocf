@@ -15,7 +15,7 @@
 
 void ocf_metadata_hash_get_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_part_id_t *part_id, ocf_cache_line_t *next_line,
+		ocf_cache_line_t *next_line,
 		ocf_cache_line_t *prev_line);
 
 /* TODOL find a better place for this */
@@ -23,22 +23,15 @@ struct eviction_policy *ocf_metadata_hash_get_eviction(
 		struct ocf_cache *cache, ocf_part_id_t part_id,
 		unsigned ev_no);
 
-static inline ocf_part_id_t ocf_metadata_hash_get_partition_id(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	ocf_part_id_t part_id;
-
-	ocf_metadata_hash_get_partition_info(cache, line, &part_id, NULL, NULL);
-
-	return part_id;
-}
+ocf_part_id_t ocf_metadata_hash_get_partition_id(
+		struct ocf_cache *cache, ocf_cache_line_t line);
 
 static inline ocf_cache_line_t ocf_metadata_hash_get_partition_next(
 		struct ocf_cache *cache, ocf_cache_line_t line)
 {
 	ocf_cache_line_t next;
 
-	ocf_metadata_hash_get_partition_info(cache, line, NULL, &next, NULL);
+	ocf_metadata_hash_get_partition_info(cache, line, &next, NULL);
 
 	return next;
 }
@@ -48,7 +41,7 @@ static inline ocf_cache_line_t ocf_metadata_hash_get_partition_prev(
 {
 	ocf_cache_line_t prev;
 
-	ocf_metadata_hash_get_partition_info(cache, line, NULL, NULL, &prev);
+	ocf_metadata_hash_get_partition_info(cache, line, NULL, &prev);
 
 	return prev;
 }
@@ -63,7 +56,7 @@ void ocf_metadata_hash_set_partition_prev(
 
 void ocf_metadata_hash_set_partition_info(
 		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_part_id_t part_id, ocf_cache_line_t next_line,
+		ocf_cache_line_t next_line,
 		ocf_cache_line_t prev_line);
 
 void ocf_metadata_hash_set_partition_id(

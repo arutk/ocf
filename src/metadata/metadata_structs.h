@@ -367,7 +367,7 @@ struct ocf_metadata_iface {
 			ocf_cache_line_t line);
 
 	void (*get_partition_info)(struct ocf_cache *cache,
-			ocf_cache_line_t line, ocf_part_id_t *part_id,
+			ocf_cache_line_t line,
 			ocf_cache_line_t *next_line,
 			ocf_cache_line_t *prev_line);
 
@@ -378,7 +378,7 @@ struct ocf_metadata_iface {
 			ocf_cache_line_t line, ocf_cache_line_t prev_line);
 
 	void (*set_partition_info)(struct ocf_cache *cache,
-			ocf_cache_line_t line, ocf_part_id_t part_id,
+			ocf_cache_line_t line,
 			ocf_cache_line_t next_line, ocf_cache_line_t prev_line);
 
 	const struct ocf_metadata_status*

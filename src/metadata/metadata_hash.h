@@ -37,6 +37,12 @@ enum ocf_metadata_segment {
 	metadata_segment_hash,		/*!< Hash */
 	/* .... new variable size sections go here */
 
+	/* moving this to a separate segment as this is
+	 * practically obsolete, just need to fully get
+	 * rid of partition list and freelist (all
+	 * needed info is on lru list */
+	metadata_segment_partition_list,
+
 	metadata_segment_max,		/*!< MAX */
 };
 

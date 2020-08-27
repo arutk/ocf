@@ -9,18 +9,19 @@
 /**
  * @brief Metadata map structure
  */
+struct ocf_metadata_partition_list_info {
+	/*!<  Next cache line in collision list*/
+	ocf_cache_line_t partition_prev;
+	/*!<  Previous cache line in the same partition*/
+	ocf_cache_line_t partition_next;
+	/*!<  Next cache line in the same partition*/
+};
+
 
 struct ocf_metadata_list_info {
 	ocf_cache_line_t prev_col;
 		/*!<  Previous cache line in collision list */
 	ocf_cache_line_t next_col;
-		/*!<  Next cache line in collision list*/
-	ocf_cache_line_t partition_prev;
-		/*!<  Previous cache line in the same partition*/
-	ocf_cache_line_t partition_next;
-		/*!<  Next cache line in the same partition*/
-	ocf_part_id_t partition_id : 8;
-		/*!<  ID of partition where is assigned this cache line*/
 };
 
 /**
@@ -34,11 +35,12 @@ struct ocf_metadata_cacheline {
 	uint16_t core_id; // 2
 		/*!<  ID of core where is assigned this cache line*/
 
+	/*!<  ID of partition where is assigned this cache line*/
+	uint8_t partition_id;
 	ocf_cache_line_t hash; // 4
-
-	struct ocf_metadata_list_info list; // 20
+	struct ocf_metadata_list_info list; // 8
 	struct cleaning_policy_meta cleaning; // 12
-	union eviction_policy_meta eviction;  // 8
+	union eviction_policy_meta eviction;  // 12
 };
 
 
