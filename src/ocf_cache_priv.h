@@ -103,8 +103,6 @@ struct ocf_cache {
 
 	struct ocf_cache_device *device;
 
-	struct ocf_user_part user_parts[OCF_IO_CLASS_MAX + 1];
-
 	unsigned num_evps;
 
 	struct ocf_metadata metadata;
@@ -150,8 +148,10 @@ struct ocf_cache {
 
 	bool use_submit_io_fast;
 
-
 	void *priv;
+
+	struct ocf_user_part user_parts[OCF_IO_CLASS_MAX + 1];
+
 
 	/* === rarely used ========*/
 
@@ -173,7 +173,7 @@ struct ocf_cache {
 	struct ocf_trace trace;
 	ocf_pipeline_t stop_pipeline;
 	ocf_freelist_t freelist;
-};
+} __attribute__ ((aligned (64)));
 
 static inline ocf_core_t ocf_cache_get_core(ocf_cache_t cache,
 		ocf_core_id_t core_id)

@@ -46,7 +46,7 @@ struct ocf_core_meta_config {
 
 	uint8_t user_data[OCF_CORE_USER_DATA_SIZE];
 	char name[OCF_CORE_NAME_SIZE];
-} __attribute__ ((aligned (8)));;
+} __attribute__ ((aligned (64)));;
 
 struct ocf_core_meta_runtime {
 	/* Number of blocks from that objects that currently are cached
@@ -65,8 +65,8 @@ struct ocf_core_meta_runtime {
 		 * cache device
 		 */
 		env_atomic dirty_clines;
-	} __attribute__ ((aligned (8))) part_counters[OCF_IO_CLASS_MAX];
-} __attribute__ ((aligned (8))); 
+	} __attribute__ ((aligned (64))) part_counters[OCF_IO_CLASS_MAX];
+} __attribute__ ((aligned (64))); 
 
 
 struct ocf_core {
@@ -92,7 +92,7 @@ struct ocf_core {
 	struct ocf_counters_core /* __percpu */  *counters;
 
 	void *priv;
-}  __attribute__ ((aligned (8)));  
+}  __attribute__ ((aligned (64)));  
 
 bool ocf_core_is_valid(ocf_cache_t cache, ocf_core_id_t id);
 

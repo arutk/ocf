@@ -25,13 +25,13 @@ struct ocf_user_part_config {
         } flags;
 
         char name[OCF_IO_CLASS_NAME_MAX];
-} __attribute__ ((aligned (8)));;
+} __attribute__ ((aligned (64)));;
 
 struct ocf_user_part_runtime {
         uint32_t curr_size;
         uint32_t head;
         struct cleaning_policy cleaning;
-} __attribute__ ((aligned (8)));
+} __attribute__ ((aligned (64)));
 
 typedef bool ( *_lru_hash_locked_pfn)(void *context,
 		ocf_core_id_t core_id, uint64_t core_line);
@@ -60,7 +60,7 @@ struct ocf_part_cleaning_ctx {
 	env_atomic64  next_lru;
 	ocf_cache_line_t clines[32];
 	unsigned num_clines;
-} __attribute__ ((aligned (8)));;
+} __attribute__ ((aligned (64)));;
 
 struct ocf_user_part {
         struct ocf_user_part_config *config;
@@ -68,7 +68,6 @@ struct ocf_user_part {
         struct ocf_lst_entry lst_valid;
 	struct ocf_part_cleaning_ctx cleaning;
 	struct eviction_policy *eviction[EVICTION_MAX_PARTS];
-} __attribute__ ((aligned (8)));
-
+} __attribute__ ((aligned (64)));
 
 #endif /* __METADATA_PARTITION_STRUCTS_H__ */
