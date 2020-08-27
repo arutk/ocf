@@ -2140,7 +2140,7 @@ static inline struct ocf_metadata_cacheline* ocf_get_cacheline_meta(
 {
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
-	return ocf_metadata_raw_rd_access(cache,
+	return ocf_metadata_raw_access(cache,
 			&(ctrl->raw_desc[metadata_segment_cacheline]),
 			line);
 }
@@ -2186,7 +2186,7 @@ struct ocf_metadata_uuid *ocf_metadata_hash_get_core_uuid(
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	muuid = ocf_metadata_raw_wr_access(cache,
+	muuid = ocf_metadata_raw_access(cache,
 			&(ctrl->raw_desc[metadata_segment_core_uuid]), core_id);
 
 	if (!muuid)
@@ -2204,7 +2204,7 @@ struct eviction_policy *ocf_metadata_hash_get_eviction(
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	eviction = ocf_metadata_raw_wr_access(cache,
+	eviction = ocf_metadata_raw_access(cache,
 			&(ctrl->raw_desc[metadata_segment_eviction_runtime]),
 			part_id * EVICTION_MAX_PARTS + ev_no);
 
@@ -2363,7 +2363,7 @@ get_partition_list_info(struct ocf_cache *cache, ocf_cache_line_t line)
 	struct ocf_metadata_hash_ctrl *ctrl =
 		(struct ocf_metadata_hash_ctrl *) cache->metadata.iface_priv;
 
-	return 	ocf_metadata_raw_wr_access(cache,
+	return 	ocf_metadata_raw_access(cache,
 			&(ctrl->raw_desc[metadata_segment_partition_list]),
 			line);
 }
