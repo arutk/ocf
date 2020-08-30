@@ -273,7 +273,6 @@ int ocf_core_submit_io_fast(struct ocf_io *io)
 	struct ocf_event_io trace_event;
 	ocf_core_t core;
 	ocf_cache_t cache;
-	int fast;
 	int ret;
 
 	OCF_CHECK_NULL(io);
@@ -309,24 +308,6 @@ int ocf_core_submit_io_fast(struct ocf_io *io)
 
 	ocf_resolve_effective_cache_mode(cache, core, req);
 
-	switch (req->cache_mode) {
-	case ocf_req_cache_mode_pt:
-		return -OCF_ERR_IO;
-	case ocf_req_cache_mode_wb:
-	case ocf_req_cache_mode_wo:
-		req->cache_mode = ocf_req_cache_mode_fast;
-		break;
-	default:
-		if (cache->use_submit_io_fast)
-			break;
-		if (io->dir == OCF_WRITE)
-			return -OCF_ERR_IO;
-
-		req->cache_mode = ocf_req_cache_mode_fast;
-	}
-
-	ocf_core_update_stats(core, io);
-
 	if (cache->trace.trace_callback) {
 		if (io->dir == OCF_WRITE)
 			ocf_trace_prep_io_event(&trace_event, req, ocf_event_operation_wr);
@@ -336,17 +317,14 @@ int ocf_core_submit_io_fast(struct ocf_io *io)
 
 	ocf_io_get(io);
 
-	fast = ocf_engine_hndl_fast_req(req);
-	if (fast != OCF_FAST_PATH_NO) {
-		ocf_trace_push(io->io_queue, &trace_event, sizeof(trace_event));
-		ocf_seq_cutoff_update(core, req);
-		return 0;
+	ret = ocf_engine_hndl_req(req);
+
+	if (ret) {
+		dec_counter_if_req_was_dirty(req);
+		ocf_io_end(io, ret);
 	}
 
-	dec_counter_if_req_was_dirty(req);
-
-	ocf_io_put(io);
-	return -OCF_ERR_IO;
+	return 0;
 }
 
 static void ocf_core_volume_submit_flush(struct ocf_io *io)

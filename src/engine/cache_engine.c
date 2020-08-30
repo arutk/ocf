@@ -263,23 +263,28 @@ void ocf_resolve_effective_cache_mode(ocf_cache_t cache,
 
 int ocf_engine_hndl_req(struct ocf_request *req)
 {
-	ocf_cache_t cache = req->cache;
+	const struct ocf_io_if *io_if;
+	int ret;
 
-	OCF_CHECK_NULL(cache);
-
-	req->io_if = ocf_get_io_if(req->cache_mode);
-	if (!req->io_if)
+	io_if = ocf_get_io_if(req->cache_mode);
+	if (!io_if)
 		return -OCF_ERR_INVAL;
 
 	ocf_req_get(req);
 
-	/* Till OCF engine is not synchronous fully need to push OCF request
-	 * to into OCF workers
-	 */
+	switch (req->rw) {
+	case OCF_READ:
+		ret = io_if->read(req);
+		break;
+	case OCF_WRITE:
+		ret = io_if->write(req);
+		break;
+	default:
+		ENV_BUG();
+		break;
+	}
 
-	ocf_engine_push_req_back(req, true);
-
-	return 0;
+	return ret;
 }
 
 int ocf_engine_hndl_fast_req(struct ocf_request *req)
