@@ -37,7 +37,6 @@ struct ocf_user_part_runtime {
    in round robin order */
 struct ocf_lru_iter {
 	ocf_cache_t cache;
-	ocf_part_id_t part_id;
 	struct ocf_user_part *part;
 	ocf_cache_line_t curr_cline[OCF_NUM_EVICTION_LISTS];
 	bool empty_evps[OCF_NUM_EVICTION_LISTS];
@@ -48,6 +47,8 @@ struct ocf_lru_iter {
 struct ocf_user_part {
 	struct ocf_user_part_config *config;
 	struct ocf_user_part_runtime *runtime;
+	struct ocf_refcnt cleaning;
+	unsigned id;
 
 	struct ocf_lru_iter eviction_clean_iter;
 	uint32_t next_eviction_list;
