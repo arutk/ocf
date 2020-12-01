@@ -1213,7 +1213,7 @@ static void ocf_metadata_generic_complete(void *priv, int error)
 	OCF_PL_NEXT_ON_SUCCESS_RET(context->pipeline, error);
 }
 
-static void ocf_medatata_hash_load_segment(ocf_pipeline_t pipeline,
+static void ocf_metadata_load_segment(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1227,7 +1227,7 @@ static void ocf_medatata_hash_load_segment(ocf_pipeline_t pipeline,
 			ocf_metadata_generic_complete, context);
 }
 
-static void ocf_medatata_hash_store_segment(ocf_pipeline_t pipeline,
+static void ocf_metadata_store_segment(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1255,7 +1255,7 @@ static void ocf_medatata_hash_store_segment(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_check_crc_sb_config(ocf_pipeline_t pipeline,
+static void ocf_metadata_check_crc_sb_config(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1282,7 +1282,7 @@ static void ocf_medatata_hash_check_crc_sb_config(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_check_crc_skip(ocf_pipeline_t pipeline,
+static void ocf_metadata_check_crc_skip(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg, bool skip_on_dirty_shutdown)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1317,19 +1317,19 @@ static void ocf_medatata_hash_check_crc_skip(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_check_crc(ocf_pipeline_t pipeline,
+static void ocf_metadata_check_crc(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
-	ocf_medatata_hash_check_crc_skip(pipeline, priv, arg, false);
+	ocf_metadata_check_crc_skip(pipeline, priv, arg, false);
 }
 
-static void ocf_medatata_hash_check_crc_if_clean(ocf_pipeline_t pipeline,
+static void ocf_metadata_check_crc_if_clean(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
-	ocf_medatata_hash_check_crc_skip(pipeline, priv, arg, true);
+	ocf_metadata_check_crc_skip(pipeline, priv, arg, true);
 }
 
-static void ocf_medatata_hash_load_superblock_post(ocf_pipeline_t pipeline,
+static void ocf_metadata_load_superblock_post(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1456,16 +1456,16 @@ struct ocf_pipeline_properties ocf_metadata_load_sb_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_load_superblock_finish,
 	.steps = {
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_store_segment,
+		OCF_PL_STEP_FOREACH(ocf_metadata_store_segment,
 				ocf_metadata_load_sb_store_segment_args),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_load_segment,
+		OCF_PL_STEP_FOREACH(ocf_metadata_load_segment,
 				ocf_metadata_load_sb_load_segment_args),
-		OCF_PL_STEP(ocf_medatata_hash_check_crc_sb_config),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_check_crc,
+		OCF_PL_STEP(ocf_metadata_check_crc_sb_config),
+		OCF_PL_STEP_FOREACH(ocf_metadata_check_crc,
 				ocf_metadata_load_sb_check_crc_args),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_check_crc_if_clean,
+		OCF_PL_STEP_FOREACH(ocf_metadata_check_crc_if_clean,
 				ocf_metadata_load_sb_check_crc_args_clean),
-		OCF_PL_STEP(ocf_medatata_hash_load_superblock_post),
+		OCF_PL_STEP(ocf_metadata_load_superblock_post),
 		OCF_PL_STEP_TERMINATOR(),
 	},
 };
@@ -1509,7 +1509,7 @@ void ocf_metadata_load_superblock(ocf_cache_t cache, ocf_metadata_end_t cmpl,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_flush_superblock_prepare(ocf_pipeline_t pipeline,
+static void ocf_metadata_flush_superblock_prepare(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1526,7 +1526,7 @@ static void ocf_medatata_hash_flush_superblock_prepare(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_calculate_crc_sb_config(ocf_pipeline_t pipeline,
+static void ocf_metadata_calculate_crc_sb_config(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1544,7 +1544,7 @@ static void ocf_medatata_hash_calculate_crc_sb_config(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_calculate_crc(ocf_pipeline_t pipeline,
+static void ocf_metadata_calculate_crc(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1562,7 +1562,7 @@ static void ocf_medatata_hash_calculate_crc(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-static void ocf_medatata_hash_flush_segment(ocf_pipeline_t pipeline,
+static void ocf_metadata_flush_segment(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1631,11 +1631,11 @@ struct ocf_pipeline_properties ocf_metadata_flush_sb_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_flush_superblock_finish,
 	.steps = {
-		OCF_PL_STEP(ocf_medatata_hash_flush_superblock_prepare),
-		OCF_PL_STEP(ocf_medatata_hash_calculate_crc_sb_config),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_calculate_crc,
+		OCF_PL_STEP(ocf_metadata_flush_superblock_prepare),
+		OCF_PL_STEP(ocf_metadata_calculate_crc_sb_config),
+		OCF_PL_STEP_FOREACH(ocf_metadata_calculate_crc,
 				ocf_metadata_flush_sb_calculate_crc_args),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_flush_segment,
+		OCF_PL_STEP_FOREACH(ocf_metadata_flush_segment,
 				ocf_metadata_flush_sb_flush_segment_args),
 		OCF_PL_STEP(ocf_metadata_flush_disk),
 		OCF_PL_STEP_TERMINATOR(),
@@ -1724,7 +1724,7 @@ uint64_t ocf_metadata_get_reserved_lba(
  * FLUSH AND LOAD ALL
  ******************************************************************************/
 
-static void ocf_medatata_hash_flush_all_set_status_complete(
+static void ocf_metadata_flush_all_set_status_complete(
 		void *priv, int error)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1732,7 +1732,7 @@ static void ocf_medatata_hash_flush_all_set_status_complete(
 	OCF_PL_NEXT_ON_SUCCESS_RET(context->pipeline, error);
 }
 
-static void ocf_medatata_hash_flush_all_set_status(ocf_pipeline_t pipeline,
+static void ocf_metadata_flush_all_set_status(ocf_pipeline_t pipeline,
 		void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -1741,7 +1741,7 @@ static void ocf_medatata_hash_flush_all_set_status(ocf_pipeline_t pipeline,
 			ocf_pipeline_arg_get_int(arg);
 
 	ocf_metadata_set_shutdown_status(cache, shutdown_status,
-			ocf_medatata_hash_flush_all_set_status_complete,
+			ocf_metadata_flush_all_set_status_complete,
 			context);
 }
 
@@ -1780,13 +1780,13 @@ struct ocf_pipeline_properties ocf_metadata_flush_all_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_flush_all_finish,
 	.steps = {
-		OCF_PL_STEP_ARG_INT(ocf_medatata_hash_flush_all_set_status,
+		OCF_PL_STEP_ARG_INT(ocf_metadata_flush_all_set_status,
 				ocf_metadata_dirty_shutdown),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_flush_segment,
+		OCF_PL_STEP_FOREACH(ocf_metadata_flush_segment,
 				ocf_metadata_flush_all_args),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_calculate_crc,
+		OCF_PL_STEP_FOREACH(ocf_metadata_calculate_crc,
 				ocf_metadata_flush_all_args),
-		OCF_PL_STEP_ARG_INT(ocf_medatata_hash_flush_all_set_status,
+		OCF_PL_STEP_ARG_INT(ocf_metadata_flush_all_set_status,
 				ocf_metadata_clean_shutdown),
 		OCF_PL_STEP_TERMINATOR(),
 	},
@@ -1906,9 +1906,9 @@ struct ocf_pipeline_properties ocf_metadata_load_all_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_load_all_finish,
 	.steps = {
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_load_segment,
+		OCF_PL_STEP_FOREACH(ocf_metadata_load_segment,
 				ocf_metadata_load_all_args),
-		OCF_PL_STEP_FOREACH(ocf_medatata_hash_check_crc,
+		OCF_PL_STEP_FOREACH(ocf_metadata_check_crc,
 				ocf_metadata_load_all_args),
 		OCF_PL_STEP_TERMINATOR(),
 	},
@@ -2069,7 +2069,7 @@ ocf_metadata_load_recovery_legacy_pl_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_load_recovery_legacy_finish,
 	.steps = {
-		OCF_PL_STEP_ARG_INT(ocf_medatata_hash_load_segment,
+		OCF_PL_STEP_ARG_INT(ocf_metadata_load_segment,
 				metadata_segment_collision),
 		OCF_PL_STEP_ARG_INT(_recovery_rebuild_metadata, true),
 		OCF_PL_STEP_TERMINATOR(),
@@ -2172,7 +2172,7 @@ static int ocf_metadata_load_atomic_metadata_drain(void *priv,
 	return 0;
 }
 
-static void ocf_medatata_hash_load_atomic_metadata(
+static void ocf_metadata_load_atomic_metadata(
 		ocf_pipeline_t pipeline, void *priv, ocf_pipeline_arg_t arg)
 {
 	struct ocf_metadata_context *context = priv;
@@ -2211,7 +2211,7 @@ ocf_metadata_load_recovery_atomic_pl_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
 	.finish = ocf_metadata_load_recovery_atomic_finish,
 	.steps = {
-		OCF_PL_STEP(ocf_medatata_hash_load_atomic_metadata),
+		OCF_PL_STEP(ocf_metadata_load_atomic_metadata),
 		OCF_PL_STEP_ARG_INT(_recovery_rebuild_metadata, false),
 		OCF_PL_STEP_TERMINATOR(),
 	},
