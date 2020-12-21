@@ -48,41 +48,27 @@ int ocf_metadata_actor(struct ocf_cache *cache,
 		ocf_metadata_actor_t actor)
 {
 	uint32_t step = 0;
-	ocf_cache_line_t i, next_i;
+	ocf_cache_line_t i;
 	uint64_t start_line, end_line;
 	int ret = 0;
 
 	start_line = ocf_bytes_2_lines(cache, start_byte);
 	end_line = ocf_bytes_2_lines(cache, end_byte);
 
-	if (part_id != PARTITION_INVALID) {
-		for (i = cache->user_parts[part_id].runtime->head;
-				i != cache->device->collision_table_entries;
-				i = next_i) {
-			next_i = ocf_metadata_get_partition_next(cache, i);
-
-			if (_is_cache_line_acting(cache, i, core_id,
-					start_line, end_line)) {
-				if (ocf_cache_line_is_used(cache, i))
-					ret = -OCF_ERR_AGAIN;
-				else
-					actor(cache, i);
-			}
-
-			OCF_COND_RESCHED_DEFAULT(step);
+	for (i = 0; i < cache->device->collision_table_entries; ++i) {
+		if (part_id != PARTITION_INVALID) {
+			if (ocf_metadata_get_partition_id(cache, i) != part_id)
+				break;
 		}
-	} else {
-		for (i = 0; i < cache->device->collision_table_entries; ++i) {
-			if (_is_cache_line_acting(cache, i, core_id,
-					start_line, end_line)) {
-				if (ocf_cache_line_is_used(cache, i))
-					ret = -OCF_ERR_AGAIN;
-				else
-					actor(cache, i);
-			}
-
-			OCF_COND_RESCHED_DEFAULT(step);
+		if (_is_cache_line_acting(cache, i, core_id,
+				start_line, end_line)) {
+			if (ocf_cache_line_is_used(cache, i))
+				ret = -OCF_ERR_AGAIN;
+			else
+				actor(cache, i);
 		}
+
+		OCF_COND_RESCHED_DEFAULT(step);
 	}
 
 	return ret;

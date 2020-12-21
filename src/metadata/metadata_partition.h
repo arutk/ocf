@@ -13,53 +13,8 @@
 #define PARTITION_INVALID		((ocf_part_id_t)-1)
 #define PARTITION_SIZE_MAX		((ocf_cache_line_t)-1)
 
-void ocf_metadata_get_partition_info(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_part_id_t *part_id, ocf_cache_line_t *next_line,
-		ocf_cache_line_t *prev_line);
-
-static inline ocf_part_id_t ocf_metadata_get_partition_id(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	ocf_part_id_t part_id;
-
-	ocf_metadata_get_partition_info(cache, line, &part_id, NULL, NULL);
-
-	return part_id;
-}
-
-static inline ocf_cache_line_t ocf_metadata_get_partition_next(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	ocf_cache_line_t next;
-
-	ocf_metadata_get_partition_info(cache, line, NULL, &next, NULL);
-
-	return next;
-}
-
-static inline ocf_cache_line_t ocf_metadata_get_partition_prev(
-		struct ocf_cache *cache, ocf_cache_line_t line)
-{
-	ocf_cache_line_t prev;
-
-	ocf_metadata_get_partition_info(cache, line, NULL, NULL, &prev);
-
-	return prev;
-}
-
-void ocf_metadata_set_partition_next(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t next_line);
-
-void ocf_metadata_set_partition_prev(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_cache_line_t prev_line);
-
-void ocf_metadata_set_partition_info(
-		struct ocf_cache *cache, ocf_cache_line_t line,
-		ocf_part_id_t part_id, ocf_cache_line_t next_line,
-		ocf_cache_line_t prev_line);
+ocf_part_id_t ocf_metadata_get_partition_id(struct ocf_cache *cache,
+		ocf_cache_line_t line);
 
 void ocf_metadata_add_to_partition(struct ocf_cache *cache,
 		ocf_part_id_t part_id, ocf_cache_line_t line);
