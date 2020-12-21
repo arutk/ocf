@@ -437,7 +437,7 @@ static inline bool __lock_cache_line_wr(struct ocf_cache_line_concurrency *c,
 
 	__unlock_waiters_list(c, line, flags);
 
-	if (locked)
+	if (locked) {
 		_req_on_lock(ctx, cb, ctx_id, line, OCF_WRITE);
 		env_allocator_del(c->allocator, waiter);
 	}
