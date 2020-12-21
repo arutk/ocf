@@ -6,21 +6,18 @@
 #include "ocf/ocf.h"
 #include "metadata/metadata.h"
 
-struct ocf_part {
-        ocf_cache_line_t head;
-        ocf_cache_line_t tail;
-        env_atomic64 curr_size;
-};
-
 struct ocf_freelist {
 	/* parent cache */
 	struct ocf_cache *cache;
 
-	/* partition list array */
-	struct ocf_part *part;
+	/* freelist partition list heads */
+	struct list_head *part;
 
 	/* freelist lock array */
 	env_spinlock *lock;
+
+	/* cacheline indexed array of partition list elements */
+	struct list_head *elem;
 
 	/* number of free lists */
 	uint32_t count;
@@ -45,74 +42,6 @@ static int ocf_freelist_trylock(ocf_freelist_t freelist, uint32_t ctx)
 static void ocf_freelist_unlock(ocf_freelist_t freelist, uint32_t ctx)
 {
 	env_spinlock_unlock(&freelist->lock[ctx]);
-}
-
-/* Sets the given collision_index as the new _head_ of the Partition list. */
-static void _ocf_freelist_remove_cache_line(ocf_freelist_t freelist,
-		uint32_t ctx, ocf_cache_line_t cline)
-{
-	struct ocf_cache *cache = freelist->cache;
-	struct ocf_part *freelist_part = &freelist->part[ctx];
-	int is_head, is_tail;
-	ocf_part_id_t invalid_part_id = PARTITION_INVALID;
-	ocf_cache_line_t prev, next;
-	ocf_cache_line_t line_entries = ocf_metadata_collision_table_entries(
-			freelist->cache);
-	uint32_t free;
-
-	ENV_BUG_ON(cline >= line_entries);
-
-	/* Get Partition info */
-	ocf_metadata_get_partition_info(cache, cline, NULL, &next, &prev);
-
-	/* Find out if this node is Partition _head_ */
-	is_head = (prev == line_entries);
-	is_tail = (next == line_entries);
-
-	free = env_atomic64_read(&freelist_part->curr_size);
-
-	/* Case 1: If we are head and there is only one node. So unlink node
-	 * and set that there is no node left in the list.
-	 */
-	if (is_head && free == 1) {
-		ocf_metadata_set_partition_info(cache, cline, invalid_part_id,
-				line_entries, line_entries);
-		freelist_part->head = line_entries;
-		freelist_part->tail = line_entries;
-	} else if (is_head) {
-		/* Case 2: else if this collision_index is partition list head,
-		 * but many nodes, update head and return
-		 */
-		ENV_BUG_ON(next >= line_entries);
-
-		freelist_part->head = next;
-		ocf_metadata_set_partition_prev(cache, next, line_entries);
-		ocf_metadata_set_partition_next(cache, cline, line_entries);
-	} else if (is_tail) {
-		/* Case 3: else if this cline is partition list tail */
-		ENV_BUG_ON(prev >= line_entries);
-
-		freelist_part->tail = prev;
-		ocf_metadata_set_partition_prev(cache, cline, line_entries);
-		ocf_metadata_set_partition_next(cache, prev, line_entries);
-	} else {
-		/* Case 4: else this collision_index is a middle node.
-		 * There is no change to the head and the tail pointers.
-		 */
-
-		ENV_BUG_ON(next >= line_entries || prev >= line_entries);
-
-		/* Update prev and next nodes */
-		ocf_metadata_set_partition_prev(cache, next, prev);
-		ocf_metadata_set_partition_next(cache, prev, next);
-
-		/* Update the given node */
-		ocf_metadata_set_partition_info(cache, cline, invalid_part_id,
-				line_entries, line_entries);
-	}
-
-	env_atomic64_dec(&freelist_part->curr_size);
-	env_atomic64_dec(&freelist->total_free);
 }
 
 static ocf_cache_line_t next_phys_invalid(ocf_cache_t cache,
@@ -145,8 +74,7 @@ void ocf_freelist_populate(ocf_freelist_t freelist,
 	unsigned step = 0;
 	ocf_cache_t cache = freelist->cache;
 	unsigned num_freelists = freelist->count;
-	ocf_cache_line_t prev, next, idx;
-	ocf_cache_line_t phys;
+	ocf_cache_line_t phys, coll_idx;
 	ocf_cache_line_t collision_table_entries =
 			ocf_metadata_collision_table_entries(cache);
 	unsigned freelist_idx;
@@ -155,55 +83,28 @@ void ocf_freelist_populate(ocf_freelist_t freelist,
 	phys = 0;
 	for (freelist_idx = 0; freelist_idx < num_freelists; freelist_idx++)
 	{
-		/* calculate current freelist size */
+		struct list_head *head = &freelist->part[freelist_idx];
+
+		/* calculate current freelist pattition size */
 		freelist_size = num_free_clines / num_freelists;
 		if (freelist_idx < (num_free_clines % num_freelists))
 			++freelist_size;
 
-		env_atomic64_set(&freelist->part[freelist_idx].curr_size,
-				freelist_size);
 
-		if (!freelist_size) {
-			/* init empty freelist and move to next one */
-			freelist->part[freelist_idx].head =
-					collision_table_entries;
-			freelist->part[freelist_idx].tail =
-					collision_table_entries;
+		if (!freelist_size)
 			continue;
-		}
 
-		/* find first invalid cacheline */
-		phys = next_phys_invalid(cache, phys);
-		ENV_BUG_ON(phys == collision_table_entries);
-		idx = ocf_metadata_map_phy2lg(cache, phys);
-		++phys;
-
-		/* store freelist head */
-		freelist->part[freelist_idx].head = idx;
-
-		/* link freelist elements using partition list */
-		prev = collision_table_entries;
-		while (--freelist_size) {
+		/* populate freelist partition */
+		while (freelist_size--) {
 			phys = next_phys_invalid(cache, phys);
 			ENV_BUG_ON(phys == collision_table_entries);
-			next = ocf_metadata_map_phy2lg(cache, phys);
+			coll_idx = ocf_metadata_map_phy2lg(cache, phys);
 			++phys;
 
-			ocf_metadata_set_partition_info(cache, idx,
-					PARTITION_INVALID, next, prev);
-
-			prev = idx;
-			idx = next;
+			list_add_tail(&freelist->elem[coll_idx], head);
 
 			OCF_COND_RESCHED_DEFAULT(step);
 		}
-
-		/* terminate partition list */
-		ocf_metadata_set_partition_info(cache, idx, PARTITION_INVALID,
-			collision_table_entries, prev);
-
-		/* store freelist tail */
-		freelist->part[freelist_idx].tail = idx;
 	}
 
 	/* we should have reached the last invalid cache line */
@@ -216,34 +117,13 @@ void ocf_freelist_populate(ocf_freelist_t freelist,
 static void ocf_freelist_add_cache_line(ocf_freelist_t freelist,
 		uint32_t ctx, ocf_cache_line_t line)
 {
-	struct ocf_cache *cache = freelist->cache;
-	struct ocf_part *freelist_part = &freelist->part[ctx];
-	ocf_cache_line_t tail;
 	ocf_cache_line_t line_entries = ocf_metadata_collision_table_entries(
 							freelist->cache);
-	ocf_part_id_t invalid_part_id = PARTITION_INVALID;
 
 	ENV_BUG_ON(line >= line_entries);
 
-	if (env_atomic64_read(&freelist_part->curr_size) == 0) {
-		freelist_part->head = line;
-		freelist_part->tail = line;
+	list_add_tail(&freelist->elem[line], &freelist->part[ctx]);
 
-		ocf_metadata_set_partition_info(cache, line, invalid_part_id,
-				line_entries, line_entries);
-	} else {
-		tail = freelist_part->tail;
-
-		ENV_BUG_ON(tail >= line_entries);
-
-		ocf_metadata_set_partition_info(cache, line, invalid_part_id,
-				line_entries, tail);
-		ocf_metadata_set_partition_next(cache, tail, line);
-
-		freelist_part->tail = line;
-	}
-
-	env_atomic64_inc(&freelist_part->curr_size);
 	env_atomic64_inc(&freelist->total_free);
 }
 
@@ -256,7 +136,9 @@ static ocf_freelist_get_err_t ocf_freelist_get_cache_line_ctx(
 		ocf_freelist_t freelist, uint32_t ctx, bool can_wait,
 		ocf_cache_line_t *cline)
 {
-	if (env_atomic64_read(&freelist->part[ctx].curr_size) == 0)
+	struct list_head *elem;
+
+	if (list_empty(&freelist->part[ctx]))
 		return -OCF_FREELIST_ERR_LIST_EMPTY;
 
 	if (!can_wait && ocf_freelist_trylock(freelist, ctx))
@@ -265,15 +147,17 @@ static ocf_freelist_get_err_t ocf_freelist_get_cache_line_ctx(
 	if (can_wait)
 		ocf_freelist_lock(freelist, ctx);
 
-	if (env_atomic64_read(&freelist->part[ctx].curr_size) == 0) {
+	if (list_empty(&freelist->part[ctx])) {
 		ocf_freelist_unlock(freelist, ctx);
 		return -OCF_FREELIST_ERR_LIST_EMPTY;
 	}
 
-	*cline = freelist->part[ctx].head;
-	_ocf_freelist_remove_cache_line(freelist, ctx, *cline);
+	elem = freelist->part[ctx].next;
+	list_del(elem);
 
 	ocf_freelist_unlock(freelist, ctx);
+
+	*cline = (ocf_cache_line_t)(elem - freelist->elem);
 
 	return 0;
 }
@@ -384,17 +268,16 @@ ocf_freelist_t ocf_freelist_init(struct ocf_cache *cache)
 	env_atomic64_set(&freelist->total_free, 0);
 	freelist->lock = env_vzalloc(sizeof(freelist->lock[0]) * num);
 	freelist->part = env_vzalloc(sizeof(freelist->part[0]) * num);
+	freelist->elem = env_vzalloc(sizeof(freelist->elem[0]) * line_entries);
 
-	if (!freelist->lock || !freelist->part)
+	if (!freelist->lock || !freelist->part || !freelist->elem)
 		goto free_allocs;
 
 	for (i = 0; i < num; i++) {
 		if (env_spinlock_init(&freelist->lock[i]))
 			goto spinlock_err;
 
-		freelist->part[i].head = line_entries;
-		freelist->part[i].tail = line_entries;
-		env_atomic64_set(&freelist->part[i].curr_size, 0);
+		INIT_LIST_HEAD(&freelist->part[i]);
 	}
 
 	return freelist;
@@ -405,6 +288,7 @@ spinlock_err:
 free_allocs:
 	env_vfree(freelist->lock);
 	env_vfree(freelist->part);
+	env_vfree(freelist->elem);
 	env_vfree(freelist);
 	return NULL;
 }
