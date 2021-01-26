@@ -1615,6 +1615,7 @@ struct ocf_mngt_cache_stop_context {
 	ocf_ctx_t ctx;
 	char cache_name[OCF_CACHE_NAME_SIZE];
 	int cache_write_error;
+	bool cache_dirty;
 };
 
 static void ocf_mngt_cache_stop_wait_metadata_io_finish(void *priv)
@@ -1633,6 +1634,16 @@ static void ocf_mngt_cache_stop_wait_metadata_io(ocf_pipeline_t pipeline,
 	ocf_refcnt_freeze(&cache->refcnt.metadata);
 	ocf_refcnt_register_zero_cb(&cache->refcnt.metadata,
 			ocf_mngt_cache_stop_wait_metadata_io_finish, context);
+}
+
+static void ocf_mngt_cache_stop_check_dirty(ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+	struct ocf_mngt_cache_stop_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	context->cache_dirty = ocf_mngt_cache_is_dirty(cache);
+	ocf_pipeline_next(context->pipeline);
 }
 
 static void _ocf_mngt_cache_stop_remove_cores(ocf_cache_t cache, bool attached)
@@ -1679,7 +1690,7 @@ static void ocf_mngt_cache_stop_unplug_complete(void *priv, int error)
 	ocf_pipeline_next(context->pipeline);
 }
 
-static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
+static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop, bool dirty,
 		struct _ocf_mngt_cache_unplug_context *context,
 		_ocf_mngt_cache_unplug_end_t cmpl, void *priv);
 
@@ -1689,7 +1700,8 @@ static void ocf_mngt_cache_stop_unplug(ocf_pipeline_t pipeline,
 	struct ocf_mngt_cache_stop_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
-	_ocf_mngt_cache_unplug(cache, true, &context->unplug_context,
+	_ocf_mngt_cache_unplug(cache, true, context->cache_dirty,
+			&context->unplug_context,
 			ocf_mngt_cache_stop_unplug_complete, context);
 }
 
@@ -1786,6 +1798,7 @@ struct ocf_pipeline_properties ocf_mngt_cache_stop_pipeline_properties = {
 	.finish = ocf_mngt_cache_stop_finish,
 	.steps = {
 		OCF_PL_STEP(ocf_mngt_cache_stop_wait_metadata_io),
+		OCF_PL_STEP(ocf_mngt_cache_stop_check_dirty),
 		OCF_PL_STEP(ocf_mngt_cache_stop_remove_cores),
 		OCF_PL_STEP(ocf_mngt_cache_stop_unplug),
 		OCF_PL_STEP(ocf_mngt_cache_stop_put_io_queues),
@@ -2031,11 +2044,12 @@ static void _ocf_mngt_cache_unplug_complete(void *priv, int error)
  *			clean shutdown in metadata and flush all containers.
  *		- false if the device is to be detached from cache - loading
  *			metadata from this device will not be possible.
+ * @param dirty - true if cache contains dirty data
  * @param context - context for this call, must be zeroed
  * @param cmpl Completion callback
  * @param priv Completion context
  */
-static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
+static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop, bool dirty,
 		struct _ocf_mngt_cache_unplug_context *context,
 		_ocf_mngt_cache_unplug_end_t cmpl, void *priv)
 {
@@ -2050,7 +2064,7 @@ static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
 	__deinit_cleaning_policy(cache);
 	__deinit_promotion_policy(cache);
 
-	if (ocf_mngt_cache_is_dirty(cache)) {
+	if (dirty) {
 		ENV_BUG_ON(!stop);
 
 		cache->conf_meta->dirty_flushed = DIRTY_NOT_FLUSHED;
@@ -2542,7 +2556,8 @@ static void ocf_mngt_cache_detach_unplug(ocf_pipeline_t pipeline,
 
 	/* Do the actual detach - deinit cacheline metadata,
 	 * stop cleaner thread and close cache bottom device */
-	_ocf_mngt_cache_unplug(cache, false,  &context->unplug_context,
+	_ocf_mngt_cache_unplug(cache, false, false,
+			&context->unplug_context,
 			ocf_mngt_cache_detach_unplug_complete, context);
 }
 
