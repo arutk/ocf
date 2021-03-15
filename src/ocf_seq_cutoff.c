@@ -16,9 +16,6 @@
 static inline bool ocf_seq_cutoff_is_on(ocf_cache_t cache,
 		struct ocf_request *req)
 {
-	if (!ocf_cache_is_device_attached(cache))
-		return false;
-
 	return (ocf_freelist_num_free(cache->freelist) <=
 				SEQ_CUTOFF_FULL_MARGIN + req->core_line_count);
 }
