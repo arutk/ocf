@@ -6,10 +6,13 @@
 
 #define __EVICTION_LRU_STRUCTS_H__
 
+struct ocf_lru_list;
+
 struct lru_eviction_policy_meta {
 	uint32_t prev;
 	uint32_t next;
 	uint8_t hot;
+	struct ocf_lru_list *list;
 } __attribute__((packed));
 
 struct ocf_lru_list {
