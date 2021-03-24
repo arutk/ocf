@@ -904,6 +904,23 @@ uint32_t evp_lru_req_clines(struct ocf_request *req,
 	return i;
 }
 
+void check_list_membership(ocf_cache_t cache, ocf_cache_line_t cline)
+{
+	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
+	struct ocf_user_part *part = &cache->user_parts[part_id];
+	struct ocf_lru_list *clean_list;
+	struct ocf_lru_list *dirty_list;
+	bool dirty = metadata_test_dirty(cache, cline);
+	uint32_t ev_list = (cline % OCF_NUM_EVICTION_LISTS);
+	struct lru_eviction_policy_meta *node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
+
+	clean_list = evp_lru_get_list(part, ev_list, true);
+	dirty_list = evp_lru_get_list(part, ev_list, false);
+
+	ENV_BUG_ON(dirty && node->list == clean_list);
+	ENV_BUG_ON(dirty && node->list != dirty_list);
+}
+
 /* the caller must hold the metadata lock */
 void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
@@ -924,9 +941,13 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	OCF_METADATA_EVICTION_WR_LOCK(cline);
 
+	check_list_membership(cache, cline);
+
 	if (node->next != end_marker ||
 			node->prev != end_marker ||
 			list->head == cline || list->tail == cline) {
+		ENV_BUG_ON(node->list == NULL);
+		ENV_BUG_ON(node->list != list);
 		remove_lru_list(cache, list, cline);
 		balance_lru_list(cache, list);
 	}
@@ -989,6 +1010,7 @@ void evp_lru_dirty_cline(ocf_cache_t cache, struct ocf_user_part *part,
 
 	struct lru_eviction_policy_meta *node;
 	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
+	check_list_membership(cache, cline);
 
 	clean_list = evp_lru_get_list(part, ev_list, true);
 	dirty_list = evp_lru_get_list(part, ev_list, false);
