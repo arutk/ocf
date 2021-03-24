@@ -196,8 +196,24 @@ static void ocf_engine_update_req_info(struct ocf_cache *cache,
 		req->info.seq_no++;
 }
 
-void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, bool insert);
+void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, int status);
 
+static void ocf_engine_check_on_list(struct ocf_request *req)
+{
+	struct ocf_cache *cache = req->cache;
+	struct ocf_map_info *entry;
+	uint8_t status;
+	unsigned i;
+
+	for (i = 0; i < req->core_line_count; i++) {
+		entry = &(req->map[i]);
+		status = entry->status;
+
+		if (status != LOOKUP_MISS) {
+			check_on_list(cache, entry->coll_idx, status);
+		}
+	}
+}
 static void ocf_engine_set_hot(struct ocf_request *req)
 {
 	struct ocf_cache *cache = req->cache;
@@ -217,8 +233,6 @@ static void ocf_engine_set_hot(struct ocf_request *req)
 		if (status == LOOKUP_HIT) {
 			/* Update eviction (LRU) */
 			ocf_eviction_set_hot_cache_line(cache, entry->coll_idx);
-		} else {
-			check_on_list(cache, entry->coll_idx, status == LOOKUP_INSERTED);
 		}
 	}
 }
@@ -635,8 +649,10 @@ int ocf_engine_prepare_clines(struct ocf_request *req)
 				128);
 	}
 
-	if (!ocf_req_test_mapping_error(req))
+	if (!ocf_req_test_mapping_error(req)) {
 		ocf_engine_set_hot(req);
+		ocf_engine_check_on_list(req);
+	}
 
 	return result;
 }

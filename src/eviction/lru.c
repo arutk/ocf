@@ -921,13 +921,13 @@ void check_list_membership(ocf_cache_t cache, ocf_cache_line_t cline)
 	ENV_BUG_ON(dirty && node->list != dirty_list);
 }
 
-void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, bool insert)
+void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, int status)
 {
 	struct lru_eviction_policy_meta *node;
 
 	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
 	if (node->list == NULL) {
-		printk(KERN_ERR "inserted = %c\n", insert ? 'y' : 'n');
+		printk(KERN_ERR "status = %d\n", status);
 		ENV_BUG_ON(node->list == NULL);
 	}
 }
