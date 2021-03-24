@@ -18,6 +18,148 @@
 
 static const ocf_cache_line_t end_marker = (ocf_cache_line_t)-1;
 
+void print_list(ocf_cache_t cache, struct ocf_lru_list *list)
+{
+	unsigned idx;
+	struct lru_eviction_policy_meta *node;
+
+	printk(KERN_ERR "START list elems %u hot %u\n", list->num_nodes, list->num_hot);
+	idx = list->head;
+	while (idx != end_marker) {
+		node = &ocf_metadata_get_eviction_policy(cache, idx)->lru;
+		printk(KERN_ERR "list next elem: %d hot %c\n", idx, node->hot ? 'y' : 'n');
+		idx = node->next;
+	}
+	printk(KERN_ERR "END\n");
+}
+
+void check_no_hot(ocf_cache_t cache, struct ocf_lru_list *list)
+{
+	unsigned idx;
+	struct lru_eviction_policy_meta *node;
+
+	idx = list->head;
+	while (idx != end_marker) {
+		node = &ocf_metadata_get_eviction_policy(cache, idx)->lru;
+		if (node->hot) {
+			print_list(cache, list);
+			ENV_BUG_ON(node->hot);
+		}
+		idx = node->next;
+	}
+}
+
+
+#define ENV_LIST_BUG_ON(cache, list, cond) \
+	if (cond) \
+		print_list(cache, list); \
+	ENV_BUG_ON(cond);
+
+void validate_list(ocf_cache_t cache, struct ocf_lru_list *list)
+{
+	struct lru_eviction_policy_meta *node;
+	unsigned num_elem = list->num_nodes;
+	unsigned num_hot = list->num_hot;
+	unsigned idx = list->head;
+	unsigned i = 0, h = 0;
+	bool hot_zone = true;
+	unsigned list_id = -1;
+
+	if (list->num_nodes > 0) {
+		ENV_BUG_ON(list->head == end_marker);
+		ENV_BUG_ON(list->tail == end_marker);
+		ENV_BUG_ON(list->tail >= cache->device->collision_table_entries);
+		ENV_BUG_ON(list->head >= cache->device->collision_table_entries);
+		ENV_BUG_ON(ocf_metadata_get_eviction_policy(cache, list->head)->lru.prev != end_marker);
+		ENV_BUG_ON(ocf_metadata_get_eviction_policy(cache, list->tail)->lru.next != end_marker);
+		list_id = list->head % OCF_NUM_EVICTION_LISTS;
+	}
+
+	if (num_elem > 10)
+		return;
+
+	idx = list->head;
+	while (idx != end_marker) {
+		node = &ocf_metadata_get_eviction_policy(cache, idx)->lru;
+		ENV_LIST_BUG_ON(cache, list, node->hot && !hot_zone);
+
+		if (!node->hot)
+			hot_zone = false;
+
+		if (i == 0) {
+			ENV_LIST_BUG_ON(cache, list, node->prev != end_marker);
+			ENV_LIST_BUG_ON(cache, list, list->head != idx);
+		}
+		if (i == num_elem - 1) {
+			ENV_LIST_BUG_ON(cache, list, node->next != end_marker);
+			ENV_LIST_BUG_ON(cache, list, list->tail != idx);
+		}
+
+		ENV_BUG_ON(idx % OCF_NUM_EVICTION_LISTS != list_id);
+
+		i++;
+		if (node->hot)
+			h++;
+		idx = node->next;
+	}
+
+	ENV_LIST_BUG_ON(cache, list, i != num_elem);
+	ENV_LIST_BUG_ON(cache, list, h != num_hot);
+}
+
+void validate_list_beg(ocf_cache_t cache, struct ocf_lru_list *list)
+
+{
+	struct lru_eviction_policy_meta *node;
+	unsigned num_elem = list->num_nodes;
+	unsigned num_hot = list->num_hot;
+	unsigned idx = list->head;
+	unsigned i = 0, h = 0;
+	bool hot_zone = true;
+	unsigned list_id = -1;
+
+	if (list->num_nodes > 0) {
+		ENV_BUG_ON(list->head == end_marker);
+		ENV_BUG_ON(list->tail == end_marker);
+		ENV_BUG_ON(list->tail >= cache->device->collision_table_entries);
+		ENV_BUG_ON(list->head >= cache->device->collision_table_entries);
+		ENV_BUG_ON(ocf_metadata_get_eviction_policy(cache, list->head)->lru.prev != end_marker);
+		ENV_BUG_ON(ocf_metadata_get_eviction_policy(cache, list->tail)->lru.next != end_marker);
+		list_id = list->head % OCF_NUM_EVICTION_LISTS;
+	}
+
+	if (num_elem > 10)
+		return;
+
+	idx = list->head;
+	while (idx != end_marker) {
+		node = &ocf_metadata_get_eviction_policy(cache, idx)->lru;
+		ENV_LIST_BUG_ON(cache, list, node->hot && !hot_zone);
+
+		if (!node->hot)
+			hot_zone = false;
+
+		if (i == 0) {
+			ENV_LIST_BUG_ON(cache, list, node->prev != end_marker);
+			ENV_LIST_BUG_ON(cache, list, list->head != idx);
+		}
+		if (i == num_elem - 1) {
+			ENV_LIST_BUG_ON(cache, list, node->next != end_marker);
+			ENV_LIST_BUG_ON(cache, list, list->tail != idx);
+		}
+
+		ENV_BUG_ON(idx % OCF_NUM_EVICTION_LISTS != list_id);
+
+		i++;
+		if (node->hot)
+			h++;
+		idx = node->next;
+	}
+
+	ENV_LIST_BUG_ON(cache, list, i != num_elem);
+	ENV_LIST_BUG_ON(cache, list, h != num_hot);
+}
+
 /* Adds the given collision_index to the _head_ of the LRU list */
 static void add_lru_head(ocf_cache_t cache,
 		struct ocf_lru_list *list,
@@ -28,6 +170,8 @@ static void add_lru_head(ocf_cache_t cache,
 	unsigned int curr_head_index;
 
 	ENV_BUG_ON(collision_index == end_marker);
+
+	validate_list_beg(cache, list);
 
 	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru;
 	node->hot = false;
@@ -59,11 +203,16 @@ static void add_lru_head(ocf_cache_t cache,
 		if (!curr_head->hot)
 			list->last_hot = collision_index;
 		++list->num_hot;
+		ENV_BUG_ON(list->num_hot == 0);
 
 		list->head = collision_index;
 
 		++list->num_nodes;
 	}
+
+	ENV_BUG_ON(list->num_hot == 0 && node->hot);
+
+	validate_list(cache, list);
 }
 
 /* Deletes the node with the given collision_index from the lru list */
@@ -77,13 +226,31 @@ static void remove_lru_list(ocf_cache_t cache,
 
 	ENV_BUG_ON(collision_index == end_marker);
 
+	validate_list_beg(cache, list);
+
 	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru;
 
 	is_head = (list->head == collision_index);
 	is_tail = (list->tail == collision_index);
 
-	if (node->hot)
+	if (node->hot) {
+		if (!list->num_hot) {
+			printk(KERN_ERR "is_head %c is tail %c is hot %c next %d prev %d id %u elems %u hot %u\n",
+				is_head ? 'y' : 'n',
+				is_tail ? 'y' : 'n',
+				node->hot ? 'y' : 'n',
+				node->next,
+				node->prev,
+				collision_index % OCF_NUM_EVICTION_LISTS,
+				list->num_nodes,
+				list->num_hot);
+			printk("validate list in the next step should fail\n");
+			validate_list(cache, list);
+			print_list(cache, list);
+			ENV_BUG_ON(list->num_hot == 0);
+		}
 		--list->num_hot;
+	}
 
 	/* Set prev and next (even if not existent) */
 	next_lru_node = node->next;
@@ -99,6 +266,9 @@ static void remove_lru_list(ocf_cache_t cache,
 		list->head = end_marker;
 		list->tail = end_marker;
 		list->last_hot = end_marker;
+		if (list->num_hot != 0) {
+			printk(KERN_ERR "invalid num hot: %d\n", list->num_hot);
+		}
 		ENV_BUG_ON(list->num_hot != 0);
 	}
 
@@ -171,6 +341,11 @@ static void remove_lru_list(ocf_cache_t cache,
 	}
 
 	--list->num_nodes;
+
+	if (!list->num_hot)
+		check_no_hot(cache, list);
+
+	validate_list(cache, list);
 }
 
 /* Increase / decrease number of hot elements to achieve target count.
@@ -183,15 +358,23 @@ static void balance_lru_list(ocf_cache_t cache,
 	unsigned target_hot_count = list->num_nodes / OCF_LRU_HOT_RATIO;
 	struct lru_eviction_policy_meta *node;
 
-	if (target_hot_count == list->num_hot)
+	validate_list_beg(cache, list);
+
+	if (target_hot_count == list->num_hot) {
+		if (!list->num_hot)
+			check_no_hot(cache, list);
+		validate_list(cache, list);
 		return;
+	}
 
 	if (list->num_hot == 0) {
 		node = &ocf_metadata_get_eviction_policy(cache,
 				list->head)->lru;
 		list->last_hot = list->head;
 		list->num_hot = 1;
+		ENV_BUG_ON(node->hot);
 		node->hot = 1;
+		validate_list(cache, list);
 		return;
 	}
 
@@ -201,6 +384,7 @@ static void balance_lru_list(ocf_cache_t cache,
 
 	if (target_hot_count > list->num_hot) {
 		++list->num_hot;
+		ENV_BUG_ON(list->num_hot == 0);
 		list->last_hot = node->next;
 		node = &ocf_metadata_get_eviction_policy(cache,
 				node->next)->lru;
@@ -210,13 +394,22 @@ static void balance_lru_list(ocf_cache_t cache,
 			node->hot = false;
 			list->num_hot = 0;
 			list->last_hot = end_marker;
+			check_no_hot(cache, list);
 		} else {
 			ENV_BUG_ON(node->prev == end_marker);
 			node->hot = false;
+			ENV_BUG_ON(list->num_hot == 0);
 			--list->num_hot;
 			list->last_hot = node->prev;
+			if (!list->num_hot)
+				check_no_hot(cache, list);
 		}
 	}
+
+	if (!list->num_hot)
+		check_no_hot(cache, list);
+
+	validate_list(cache, list);
 }
 
 

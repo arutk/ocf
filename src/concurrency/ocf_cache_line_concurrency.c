@@ -1134,14 +1134,24 @@ bool ocf_cache_line_is_locked_exclusively(struct ocf_cache *cache,
 			ocf_cache_line_concurrency(cache);
 	env_atomic *access = &c->access[line];
 	int val = env_atomic_read(access);
+	bool ret;
 
 	ENV_BUG_ON(val == OCF_CACHE_LINE_ACCESS_IDLE);
 
-	if (ocf_cache_line_are_waiters(c, line))
+	if (ocf_cache_line_are_waiters(c, line)) {
+		printk(KERN_ERR "not exclusive: there are waiters\n");
 		return false;
+	}
 
-	return val == OCF_CACHE_LINE_ACCESS_ONE_RD ||
+	ret =  val == OCF_CACHE_LINE_ACCESS_ONE_RD ||
 			val == OCF_CACHE_LINE_ACCESS_WR;
+
+
+	if (!ret) {
+		printk(KERN_ERR "not exclusive: current state %d\n", val);
+	}
+
+	return ret;
 }
 
 /*
