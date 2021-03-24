@@ -921,6 +921,18 @@ void check_list_membership(ocf_cache_t cache, ocf_cache_line_t cline)
 	ENV_BUG_ON(dirty && node->list != dirty_list);
 }
 
+void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, bool insert)
+{
+	struct lru_eviction_policy_meta *node;
+
+	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
+	if (node->list == NULL) {
+		printk(KERN_ERR "inserted = %c\n", insert ? 'y' : 'n');
+		ENV_BUG_ON(node->list == NULL);
+	}
+}
+
+
 /* the caller must hold the metadata lock */
 void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
@@ -1010,10 +1022,15 @@ void evp_lru_dirty_cline(ocf_cache_t cache, struct ocf_user_part *part,
 
 	struct lru_eviction_policy_meta *node;
 	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
-	check_list_membership(cache, cline);
-
 	clean_list = evp_lru_get_list(part, ev_list, true);
 	dirty_list = evp_lru_get_list(part, ev_list, false);
+
+{
+	ENV_BUG_ON(node->list == dirty_list);
+	ENV_BUG_ON(node->list == NULL);
+	ENV_BUG_ON(node->list != clean_list);
+}
+
 
 	OCF_METADATA_EVICTION_WR_LOCK(cline);
 	ENV_BUG_ON(node->list == dirty_list);

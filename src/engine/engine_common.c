@@ -196,6 +196,8 @@ static void ocf_engine_update_req_info(struct ocf_cache *cache,
 		req->info.seq_no++;
 }
 
+void check_on_list(ocf_cache_t cache, ocf_cache_line_t cline, bool insert);
+
 static void ocf_engine_set_hot(struct ocf_request *req)
 {
 	struct ocf_cache *cache = req->cache;
@@ -215,6 +217,8 @@ static void ocf_engine_set_hot(struct ocf_request *req)
 		if (status == LOOKUP_HIT) {
 			/* Update eviction (LRU) */
 			ocf_eviction_set_hot_cache_line(cache, entry->coll_idx);
+		} else {
+			check_on_list(cache, entry->coll_idx, status == LOOKUP_INSERTED);
 		}
 	}
 }
