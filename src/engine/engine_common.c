@@ -538,6 +538,7 @@ static inline int ocf_prepare_clines_evict(struct ocf_request *req)
 	ocf_engine_evict(req);
 
 	if (!ocf_req_test_mapping_error(req)) {
+		ocf_engine_set_hot(req);
 		ocf_promotion_req_purge(req->cache->promotion_policy, req);
 		lock_status = lock_clines(req);
 		if (lock_status < 0)
@@ -568,6 +569,7 @@ static inline int ocf_prepare_clines_miss(struct ocf_request *req)
 
 	ocf_engine_map(req);
 	if (!ocf_req_test_mapping_error(req)) {
+		ocf_engine_set_hot(req);
 		lock_status = lock_clines(req);
 		if (lock_status < 0) {
 			/* Mapping succeeded, but we failed to acquire cacheline lock.
@@ -606,9 +608,9 @@ int ocf_engine_prepare_clines(struct ocf_request *req)
 
 	mapped = ocf_engine_is_mapped(req);
 	if (mapped) {
+		ocf_engine_set_hot(req);
 		lock = lock_clines(req);
 		ocf_hb_req_prot_unlock_rd(req);
-		ocf_engine_set_hot(req);
 		return lock;
 	}
 
@@ -630,9 +632,6 @@ int ocf_engine_prepare_clines(struct ocf_request *req)
 		ocf_eviction_flush_dirty(req->cache, part, req->io_queue,
 				128);
 	}
-
-	if (!ocf_req_test_mapping_error(req))
-		ocf_engine_set_hot(req);
 
 	return result;
 }
