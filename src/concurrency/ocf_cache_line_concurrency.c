@@ -54,7 +54,6 @@ struct ocf_cache_line_concurrency {
 	env_mutex lock;
 	env_atomic *access;
 	env_atomic waiting;
-	size_t access_limit;
 	ocf_cache_line_t num_clines;
 	env_allocator *allocator;
 	struct __waiters_list waiters_lsts[_WAITERS_LIST_ENTRIES];
@@ -93,9 +92,7 @@ int ocf_cache_line_concurrency_init(struct ocf_cache_line_concurrency **self,
 		goto rwsem_err;
 	}
 
-	OCF_REALLOC_INIT(&c->access, &c->access_limit);
-	OCF_REALLOC_CP(&c->access, sizeof(c->access[0]), num_clines,
-		&c->access_limit);
+	c->access = env_vzalloc(num_clines * sizeof(c->access[0]));
 
 	if (!c->access) {
 		error = __LINE__;
@@ -136,7 +133,7 @@ allocation_err:
 		env_allocator_destroy(c->allocator);
 
 	if (c->access)
-		OCF_REALLOC_DEINIT(&c->access, &c->access_limit);
+		env_vfree(c->access);
 
 rwsem_err:
 	env_mutex_destroy(&c->lock);
@@ -170,8 +167,7 @@ void ocf_cache_line_concurrency_deinit(struct ocf_cache_line_concurrency **self)
 		env_spinlock_destroy(&concurrency->waiters_lsts[i].lock);
 
 	if (concurrency->access)
-		OCF_REALLOC_DEINIT(&concurrency->access,
-				&concurrency->access_limit);
+		env_vfree(concurrency->access);
 
 	if (concurrency->allocator)
 		env_allocator_destroy(concurrency->allocator);
