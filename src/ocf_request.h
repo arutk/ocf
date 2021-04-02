@@ -53,30 +53,30 @@ struct ocf_map_info {
 	ocf_cache_line_t coll_idx;
 	/*!< Index in collision table (in case of hit) */
 
-	uint64_t core_line : 40;
+	uint64_t core_line;
 
-	uint64_t status : 3;
+	ocf_core_id_t core_id;
+	/*!< Core id for multi-core requests */
+
+	uint16_t status : 8;
 	/*!< Traverse or mapping status - HIT, MISS, etc... */
 
-	uint64_t rd_locked : 1;
+	uint16_t rd_locked : 1;
 	/*!< Indicates if cache line is locked for READ access */
 
-	uint64_t wr_locked : 1;
+	uint16_t wr_locked : 1;
 	/*!< Indicates if cache line is locked for WRITE access */
 
-	uint64_t invalid : 1;
+	uint16_t invalid : 1;
 	/*!< This bit indicates that mapping is invalid */
 
-	uint64_t re_part : 1;
+	uint16_t re_part : 1;
 	/*!< This bit indicates if cache line need to be moved to the
 	 * new partition
 	 */
 
-	uint64_t flush : 1;
+	uint16_t flush : 1;
 	/*!< This bit indicates if cache line need to be flushed */
-
-	ocf_core_id_t core_id;
-	/*!< Core id for multi-core requests */
 
 	uint8_t start_flush;
 	/*!< If req need flush, contain first sector of range to flush */
