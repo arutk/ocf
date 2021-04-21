@@ -25,7 +25,6 @@ struct ocf_ctx {
 	const struct ocf_ctx_ops *ops;
 	struct {
 		struct env_mpool *req;
-		struct env_mpool *mio;
 	} resources;
 	struct list_head caches;
 	struct {
