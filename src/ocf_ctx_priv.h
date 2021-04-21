@@ -24,14 +24,13 @@ struct ocf_ctx {
 
 	const struct ocf_ctx_ops *ops;
 	struct {
-		struct env_mpool *req;
+		struct ocf_req_allocator *req;
 	} resources;
 	struct list_head caches;
 	struct {
 		struct list_head core_pool_head;
 		int core_pool_count;
 	} core_pool;
-
 
 	const struct ocf_ctx_config *cfg;
 	env_atomic ref_count;
