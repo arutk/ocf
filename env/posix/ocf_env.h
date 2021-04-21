@@ -34,7 +34,6 @@
 #include "ocf_env_list.h"
 #include "ocf_env_headers.h"
 #include "ocf/ocf_err.h"
-#include "utils_mpool.h"
 
 /* linux sector 512-bytes */
 #define ENV_SECTOR_SHIFT	9
@@ -201,9 +200,6 @@ static inline uint64_t env_get_free_memory(void)
 typedef struct _env_allocator env_allocator;
 
 env_allocator *env_allocator_create(uint32_t size, const char *fmt_name, ...);
-
-#define env_allocator_create_extended(size, fmt_name, limit) \
-	env_allocator_create(size, fmt_name)
 
 void env_allocator_destroy(env_allocator *allocator);
 
