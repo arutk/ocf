@@ -403,12 +403,12 @@ static inline bool ocf_req_test_mapping_error(struct ocf_request *req)
 	return req->info.mapping_error;
 }
 
-static inline void ocf_req_set_clean_eviction(struct ocf_request *req)
+static inline void ocf_req_set_clean_required(struct ocf_request *req)
 {
 	req->info.clean_eviction = true;
 }
 
-static inline bool ocf_req_test_clean_eviction(struct ocf_request *req)
+static inline bool ocf_req_test_clean_required(struct ocf_request *req)
 {
 	return req->info.clean_eviction;
 }
