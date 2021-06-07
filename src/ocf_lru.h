@@ -32,5 +32,6 @@ void ocf_lru_repart(ocf_cache_t cache, ocf_cache_line_t cline,
 		struct ocf_part *src_upart, struct ocf_part *dst_upart);
 uint32_t ocf_lru_num_free(ocf_cache_t cache);
 void ocf_lru_populate(ocf_cache_t cache, ocf_cache_line_t num_free_clines);
+void  ocf_lru_recover(ocf_cache_t cache);
 
 #endif
