@@ -445,8 +445,9 @@ void _ocf_mngt_load_init_instance_complete(void *priv, int error)
 		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_START_CACHE_FAIL);
 	}
 
+	/* TODO: remove this ??? */
 	if (init_meta)
-		__init_free(cache);
+		ocf_free_part_init(cache);
 
 	if (dirty_shutdown)
 		__populate_free(cache);

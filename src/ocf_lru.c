@@ -14,12 +14,18 @@
 #include "ocf_request.h"
 #include "engine/engine_common.h"
 
+/* TODO: is this needed ? */
+static inline struct ocf_lru_list *ocf_get_cline_list(ocf_cache_t cache,
+		ocf_cache_line_t cline);
+static struct ocf_lru_list *ocf_lru_get_list(struct ocf_part *part,
+		uint32_t lru_idx, bool clean);
+
 static const ocf_cache_line_t end_marker = (ocf_cache_line_t)-1;
 
 /* update list last_hot index. returns pivot element (the one for which hot
  * status effectively changes during balancing). */
 static inline ocf_cache_line_t balance_update_last_hot(ocf_cache_t cache,
-		struct ocf_lru_list *list, int change)
+		struct ocf_lru_list *list, int change, ocf_jop_t op)
 {
 	ocf_cache_line_t last_hot_new, last_hot_old;
 
@@ -44,7 +50,10 @@ static inline ocf_cache_line_t balance_update_last_hot(ocf_cache_t cache,
 		last_hot_new = list->last_hot;
 	}
 
+	OCF_JOURNAL_START_SWAP(ocf_journal_op_id_lru_balance_update_last,
+			list->last_hot, last_hot_new);
 	list->last_hot = last_hot_new;
+	OCF_JOURNAL_END();
 
 	if (change == 0)
 		return end_marker;
@@ -56,7 +65,8 @@ static inline ocf_cache_line_t balance_update_last_hot(ocf_cache_t cache,
  * Asssumes that the list has hot element clustered together at the
  * head of the list.
  */
-static void balance_lru_list(ocf_cache_t cache, struct ocf_lru_list *list)
+static void balance_lru_list(ocf_cache_t cache, struct ocf_lru_list *list,
+	ocf_jop_t op)
 {
 	unsigned target_hot_count = list->num_nodes / OCF_LRU_HOT_RATIO;
 	int change = target_hot_count - list->num_hot;
@@ -65,24 +75,81 @@ static void balance_lru_list(ocf_cache_t cache, struct ocf_lru_list *list)
 	if (!list->track_hot)
 		return;
 
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_balance);
+
 	/* 1 - update hot counter */
+	OCF_JOURNAL_START_SWAP(ocf_journal_op_id_lru_balance_update_ctr,
+			list->num_hot, target_hot_count);
 	list->num_hot = target_hot_count;
+	OCF_JOURNAL_END();
 
 	/* 2 - update last hot */
-	pivot = balance_update_last_hot(cache, list, change);
+	pivot = balance_update_last_hot(cache, list, change, op);
 
 	/* 3 - change hot bit for cacheline at the end of hot list */
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_balance_set_hot,
+			.balance_set_hot.cline = pivot,
+			.balance_set_hot.was_hot = (change < 0));
 	if (pivot != end_marker)
 		ocf_metadata_get_lru(cache, pivot)->hot = (change >= 0);
+	OCF_JOURNAL_END();
+
+	OCF_JOURNAL_END();
+}
+
+static struct ocf_lru_list *
+ocf_lru_rollback_parent_get_list(ocf_cache_t cache, ocf_jop_t op)
+{
+	struct ocf_jdata_lru_list *list_data = &ocf_journal_op_get_parent(op)->
+			data.lru_list;
+	ocf_part_id_t part_id = list_data->part_id;
+	struct ocf_part *part = part_id != PARTITION_FREELIST ?
+			&cache->user_parts[part_id].part : &cache->free;
+	uint32_t lru_list = (list_data->cline % OCF_NUM_LRU_LISTS);
+
+	return ocf_lru_get_list(part, lru_list, list_data->clean);
+}
+
+void ocf_lru_rollback_insert_lru_head(ocf_cache_t cache, ocf_jop_t op)
+{
+	struct ocf_lru_list *list = ocf_lru_rollback_parent_get_list(cache,
+			ocf_journal_op_get_parent(op));
+	struct ocf_lru_meta *old_head, *node;
+
+	list->head = op->data.insert.head;
+	if (list->head != end_marker) {
+		old_head = ocf_metadata_get_lru(cache, list->head);
+		old_head->prev = end_marker;
+	}
+
+	list->num_nodes = op->data.insert.num_nodes;
+
+	if (list->num_nodes == 0)
+		list->tail = end_marker;
+	else {
+		list->num_hot = list->num_nodes / 2;
+		if (!list->num_hot)
+			list->last_hot = end_marker;
+	}
+
+	node = ocf_metadata_get_lru(cache, op->data.insert.cline);
+	node->next = end_marker;
+	node->prev = end_marker;
+	node->hot = 0;
 }
 
 /* Adds the given collision_index to the _head_ of the LRU list */
 static void add_lru_head_nobalance(ocf_cache_t cache,
 		struct ocf_lru_list *list,
-		unsigned int collision_index)
+		unsigned int collision_index, ocf_jop_t op)
 {
 	struct ocf_lru_meta *node;
 	unsigned int curr_head_index;
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_add_insert,
+			.insert.cline = collision_index,
+			.insert.head = list->head,
+			.insert.num_nodes = list->num_nodes);
 
 	ENV_BUG_ON(collision_index == end_marker);
 
@@ -122,19 +189,61 @@ static void add_lru_head_nobalance(ocf_cache_t cache,
 
 		++list->num_nodes;
 	}
+
+	OCF_JOURNAL_END();
 }
 
 static void add_lru_head(ocf_cache_t cache, struct ocf_lru_list *list,
-		ocf_cache_line_t collision_index)
+		ocf_part_id_t part_id, bool clean,
+		ocf_cache_line_t collision_index, ocf_jop_t op)
 {
-	add_lru_head_nobalance(cache, list, collision_index);
-	balance_lru_list(cache, list);
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_add,
+			.lru_list.cline = collision_index,
+			.lru_list.part_id = part_id,
+			.lru_list.clean = clean);
+	add_lru_head_nobalance(cache, list, collision_index, op);
+	balance_lru_list(cache, list, op);
+	OCF_JOURNAL_END();
+}
+
+void ocf_lru_rollback_remove_update_ptrs(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_jop_t unlink_op = ocf_journal_op_get_parent(op);
+	ocf_cache_line_t cline = unlink_op->data.lru_unlink.cline;
+	ocf_cache_line_t prev = op->data.del_update_ptrs.prev;
+	ocf_cache_line_t next = op->data.del_update_ptrs.next;
+	struct ocf_lru_meta *node_next, *node_prev, *node;
+	struct ocf_lru_list *list;
+
+	list = ocf_get_cline_list(cache, cline);
+
+	if (prev == end_marker) {
+		/* list head was being removed */
+		list->head = cline;
+	} else {
+		node_prev = ocf_metadata_get_lru(cache, prev);
+		node_prev->next = cline;
+	}
+
+	if (next == end_marker) {
+		/* list tail was being removed */
+		list->tail = cline;
+	 } else {
+		node_next = ocf_metadata_get_lru(cache, next);
+		node_next->prev = cline;
+	}
+
+	node = ocf_metadata_get_lru(cache, cline);
+	node->prev = prev;
+	node->next = next;
+
+	list->last_hot = op->data.del_update_ptrs.curr_last_hot;
 }
 
 /* update list global pointers and node neighbours to reflect removal */
 static inline void remove_update_ptrs(ocf_cache_t cache,
 		struct ocf_lru_list *list, ocf_cache_line_t collision_index,
-		struct ocf_lru_meta *node)
+		struct ocf_lru_meta *node, ocf_jop_t op)
 {
 	uint32_t next_lru_node = node->next;
 	uint32_t prev_lru_node = node->prev;
@@ -142,6 +251,11 @@ static inline void remove_update_ptrs(ocf_cache_t cache,
 	struct ocf_lru_meta *prev_node;
 	bool is_head = (node->prev == end_marker);
 	bool is_tail = (node->next == end_marker);
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_update_ptrs,
+			.del_update_ptrs.prev = prev_lru_node,
+			.del_update_ptrs.next = next_lru_node,
+			.del_update_ptrs.curr_last_hot = list->last_hot);
 
 	if (is_head && is_tail) {
 		list->head = end_marker;
@@ -163,17 +277,48 @@ static inline void remove_update_ptrs(ocf_cache_t cache,
 
 	if (list->last_hot == collision_index)
 		list->last_hot = prev_lru_node;
+
+	OCF_JOURNAL_END();
+}
+
+void ocf_lru_rollback_remove_dec_count(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_jop_t unlink_op = ocf_journal_op_get_parent(op);
+	ocf_cache_line_t cline = unlink_op->data.lru_unlink.cline;
+	struct ocf_lru_list *list;
+
+	list = ocf_get_cline_list(cache, cline);
+	list->num_hot = op->data.del_dec_count.curr_hot_count;
+
+	ENV_BUG_ON(op->data.del_dec_count.curr_node_count == 0);
+	list->num_nodes = op->data.del_dec_count.curr_node_count;
+}
+
+void ocf_lru_rollback_remove_clear_elem(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_jop_t unlink_op = ocf_journal_op_get_parent(op);
+	ocf_cache_line_t cline = unlink_op->data.lru_unlink.cline;
+	struct ocf_lru_meta *node;
+
+	node = ocf_metadata_get_lru(cache, cline);
+
+	node->prev = end_marker;
+	node->next = end_marker;
+	node->hot = op->data.del_clear_elem.is_hot;
 }
 
 /* Deletes the node with the given collision_index from the lru list */
 static void remove_lru_list_nobalance(ocf_cache_t cache,
-		struct ocf_lru_list *list,
-		ocf_cache_line_t collision_index)
+		struct ocf_lru_list *list, ocf_cache_line_t collision_index,
+		ocf_jop_t op)
 {
 	int is_head = 0, is_tail = 0;
 	struct ocf_lru_meta *node;
 
 	ENV_BUG_ON(collision_index == end_marker);
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_unlink,
+		.lru_unlink.cline = collision_index);
 
 	node = ocf_metadata_get_lru(cache, collision_index);
 
@@ -183,31 +328,92 @@ static void remove_lru_list_nobalance(ocf_cache_t cache,
 	ENV_BUG_ON(is_head == (node->prev != end_marker));
 	ENV_BUG_ON(is_tail == (node->next != end_marker));
 
-	remove_update_ptrs(cache, list, collision_index, node);
+	remove_update_ptrs(cache, list, collision_index, node, op);
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_dec_count,
+			.del_dec_count.curr_node_count = list->num_nodes,
+			.del_dec_count.curr_hot_count = list->num_hot);
 
 	--list->num_nodes;
 	if (node->hot)
 		--list->num_hot;
 
+	OCF_JOURNAL_END();
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_clear_elem,
+			.del_clear_elem.is_hot = node->hot);
+
 	node->next = end_marker;
 	node->prev = end_marker;
 	node->hot = false;
+
+	OCF_JOURNAL_END();
+
+	OCF_JOURNAL_END();
 }
 
 static void remove_lru_list(ocf_cache_t cache, struct ocf_lru_list *list,
-		ocf_cache_line_t cline)
+		ocf_part_id_t part_id, bool clean, ocf_cache_line_t cline,
+		ocf_jop_t op)
 {
-	remove_lru_list_nobalance(cache, list, cline);
-	balance_lru_list(cache, list);
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_del,
+			.lru_list.cline = cline,
+			.lru_list.part_id = part_id,
+			.lru_list.clean = clean);
+	remove_lru_list_nobalance(cache, list, cline, op);
+	balance_lru_list(cache, list, op);
+	OCF_JOURNAL_END();
+}
+
+void ocf_lru_rollback_set_hot(ocf_cache_t cache,
+		ocf_jop_t op)
+{
+	/* noop */
 }
 
 static void ocf_lru_set_hot(ocf_cache_t cache, struct ocf_lru_list *list,
-		ocf_cache_line_t cline)
-
+		ocf_part_id_t part_id, bool clean, ocf_cache_line_t cline,
+		ocf_jop_t op)
 {
-	remove_lru_list_nobalance(cache, list, cline);
-	add_lru_head_nobalance(cache, list, cline);
-	balance_lru_list(cache, list);
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_set_hot,
+			.lru_list.cline = cline,
+			.lru_list.part_id = part_id,
+			.lru_list.clean = clean);
+
+	remove_lru_list_nobalance(cache, list, cline, op);
+	add_lru_head_nobalance(cache, list, cline, op);
+	balance_lru_list(cache, list, op);
+
+	OCF_JOURNAL_END();
+}
+
+static inline struct ocf_lru_list *ocf_lru_rollback_balance_get_list(
+		ocf_cache_t cache, ocf_jop_t op)
+{
+	return ocf_lru_rollback_parent_get_list(cache,
+			ocf_journal_op_get_parent(op));
+}
+
+void ocf_lru_rollback_balance_update_ctr(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_lru_rollback_balance_get_list(cache, op)->num_hot = op->data.swap.old;
+}
+
+
+void ocf_lru_rollback_balance_update_last(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_lru_rollback_balance_get_list(cache, op)->last_hot = op->data.swap.old;
+}
+
+void ocf_lru_rollback_balance_set_hot(ocf_cache_t cache, ocf_jop_t op)
+{
+	ocf_cache_line_t cline = op->data.balance_set_hot.cline;
+
+	if (cline == end_marker)
+		return;
+
+	ocf_metadata_get_lru(cache, cline)->hot =
+		op->data.balance_set_hot.was_hot;
 }
 
 void ocf_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
@@ -228,7 +434,7 @@ static struct ocf_lru_list *ocf_lru_get_list(struct ocf_part *part,
 			&part->runtime->lru[lru_idx].dirty;
 }
 
-static inline struct ocf_lru_list *lru_get_cline_list(ocf_cache_t cache,
+static inline struct ocf_lru_list *ocf_get_cline_list(ocf_cache_t cache,
 		ocf_cache_line_t cline)
 {
 	uint32_t lru_list = (cline % OCF_NUM_LRU_LISTS);
@@ -246,24 +452,62 @@ static inline struct ocf_lru_list *lru_get_cline_list(ocf_cache_t cache,
 
 void ocf_lru_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
-	struct ocf_lru_list *list = lru_get_cline_list(cache, cline);
+	uint32_t lru_list = (cline % OCF_NUM_LRU_LISTS);
+	ocf_part_id_t part_id;
+	struct ocf_part *part;
+	bool clean;
+	struct ocf_lru_list *list;
 
-	add_lru_head(cache, list, cline);
+	part_id = ocf_metadata_get_partition_id(cache, cline);
+	part = &cache->user_parts[part_id].part;
+	clean = !metadata_test_dirty(cache, cline);
+	list = ocf_lru_get_list(part, lru_list, clean);
+
+	add_lru_head(cache, list, part_id, clean, cline, NULL);
 }
 
 static inline void ocf_lru_move(ocf_cache_t cache, ocf_cache_line_t cline,
-		struct ocf_lru_list *src_list, struct ocf_lru_list *dst_list)
+		bool clean,
+		struct ocf_lru_list *src_list, struct ocf_lru_list *dst_list,
+		ocf_part_id_t src_part_id, ocf_part_id_t dst_part_id,
+		ocf_jop_t op)
 {
-	remove_lru_list(cache, src_list, cline);
-	add_lru_head(cache, dst_list, cline);
+	remove_lru_list(cache, src_list, src_part_id, clean, cline, op);
+	add_lru_head(cache, dst_list, dst_part_id, clean, cline, op);
 }
 
+
+/* TODO: src clean and dst clean might differ */
 static void ocf_lru_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
 		struct ocf_part *src_part, struct ocf_part *dst_part,
-		struct ocf_lru_list *src_list, struct ocf_lru_list *dst_list)
+		struct ocf_lru_list *src_list, struct ocf_lru_list *dst_list,
+		bool clean)
 {
-	ocf_lru_move(cache, cline, src_list, dst_list);
+	ocf_journal_t jrnl = cache->journal;
+	ocf_jop_t op = OCF_JOURNAL_OP_INIT_VAL();
+
+	OCF_JOURNAL_TRANSACTION_START(jrnl, ocf_journal_op_id_lru_repart);
+
+	/* TODO: logging and collecting data for composite op seems unnecessary
+	 */
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_repart,
+			.lru_move.src_part = src_part->id,
+			.lru_move.dst_part = dst_part->id,
+			.lru_move.clean = clean,
+			.lru_move.cline = cline);
+
+
+	ocf_lru_move(cache, cline, clean, src_list, dst_list, src_part->id,
+			dst_part->id, op);
+
+	OCF_JOURNAL_START(ocf_journal_op_set_part);
 	ocf_metadata_set_partition_id(cache, cline, dst_part->id);
+	OCF_JOURNAL_END();
+
+	OCF_JOURNAL_END();
+
+	OCF_JOURNAL_TRANSACTION_END(jrnl);
+
 	env_atomic_dec(&src_part->runtime->curr_size);
 	env_atomic_inc(&dst_part->runtime->curr_size);
 }
@@ -281,7 +525,7 @@ void ocf_lru_repart(ocf_cache_t cache, ocf_cache_line_t cline,
 
 	OCF_METADATA_LRU_WR_LOCK(cline);
 	ocf_lru_repart_locked(cache, cline, src_part, dst_part, src_list,
-			dst_list);
+			dst_list, clean);
 	OCF_METADATA_LRU_WR_UNLOCK(cline);
 }
 
@@ -302,7 +546,7 @@ void ocf_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	OCF_METADATA_LRU_WR_LOCK(cline);
 	ocf_lru_repart_locked(cache, cline, part, &cache->free, list,
-			free_list);
+			free_list, clean);
 	OCF_METADATA_LRU_WR_UNLOCK(cline);
 }
 
@@ -482,9 +726,11 @@ static inline ocf_cache_line_t lru_iter_eviction_next(struct ocf_lru_iter *iter,
 				dst_list = ocf_lru_get_list(dst_part,
 						curr_lru, iter->clean);
 				ocf_lru_repart_locked(cache, cline, part,
-						dst_part, list, dst_list);
+						dst_part, list, dst_list,
+						iter->clean);
 			} else {
-				ocf_lru_set_hot(cache, list, cline);
+				ocf_lru_set_hot(cache, list, dst_part->id, true,
+						cline, NULL);
 			}
 		}
 
@@ -535,7 +781,7 @@ static inline ocf_cache_line_t lru_iter_free_next(struct ocf_lru_iter *iter,
 
 		if (cline != end_marker) {
 			ocf_lru_repart_locked(cache, cline, free, dst_part,
-					list, dst_list);
+					list, dst_list, true);
 		}
 
 		ocf_metadata_lru_wr_unlock(&cache->metadata.lock,
@@ -799,6 +1045,7 @@ uint32_t ocf_lru_req_clines(struct ocf_request *req,
 /* the caller must hold the metadata lock */
 void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
+	ocf_journal_t jrnl = cache->journal;
 	const uint32_t lru_list = (cline % OCF_NUM_LRU_LISTS);
 	struct ocf_lru_meta *node;
 	struct ocf_lru_list *list;
@@ -806,6 +1053,7 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	struct ocf_part *part;
 	bool hot;
 	bool clean;
+	ocf_jop_t op = OCF_JOURNAL_OP_INIT_VAL();
 
 	node = ocf_metadata_get_lru(cache, cline);
 
@@ -821,15 +1069,19 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	clean = !metadata_test_dirty(cache, cline);
 	list = ocf_lru_get_list(part, lru_list, clean);
 
+	OCF_JOURNAL_TRANSACTION_START(jrnl, ocf_journal_op_id_lru_set_hot);
+
 	OCF_METADATA_LRU_WR_LOCK(cline);
 
 	/* cacheline must be on the list when set_hot gets called */
 	ENV_BUG_ON(node->next == end_marker && list->tail != cline);
 	ENV_BUG_ON(node->prev == end_marker && list->head != cline);
 
-	ocf_lru_set_hot(cache, list, cline);
+	ocf_lru_set_hot(cache, list, part_id, clean, cline, op);
 
 	OCF_METADATA_LRU_WR_UNLOCK(cline);
+
+	OCF_JOURNAL_TRANSACTION_END(jrnl);
 }
 
 static inline void _lru_init(struct ocf_lru_list *list, bool track_hot)
@@ -869,14 +1121,26 @@ void ocf_lru_clean_cline(ocf_cache_t cache, struct ocf_part *part,
 	uint32_t lru_list = (cline % OCF_NUM_LRU_LISTS);
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
+	ocf_journal_t jrnl = cache->journal;
+	ocf_jop_t op = OCF_JOURNAL_OP_INIT_VAL();
 
 	clean_list = ocf_lru_get_list(part, lru_list, true);
 	dirty_list = ocf_lru_get_list(part, lru_list, false);
 
+	OCF_JOURNAL_TRANSACTION_START(jrnl, ocf_journal_op_id_lru_clean_update);
+
 	OCF_METADATA_LRU_WR_LOCK(cline);
-	remove_lru_list(cache, dirty_list, cline);
-	add_lru_head(cache, clean_list, cline);
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_clean_update);
+
+	remove_lru_list(cache, dirty_list, part->id, true, cline, NULL);
+	add_lru_head(cache, clean_list, part->id, false, cline, NULL);
+
+	OCF_JOURNAL_END();
+
 	OCF_METADATA_LRU_WR_UNLOCK(cline);
+
+	OCF_JOURNAL_TRANSACTION_END(jrnl);
 }
 
 void ocf_lru_dirty_cline(ocf_cache_t cache, struct ocf_part *part,
@@ -885,14 +1149,26 @@ void ocf_lru_dirty_cline(ocf_cache_t cache, struct ocf_part *part,
 	uint32_t lru_list = (cline % OCF_NUM_LRU_LISTS);
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
+	ocf_journal_t jrnl = cache->journal;
+	ocf_jop_t op = OCF_JOURNAL_OP_INIT_VAL();
 
 	clean_list = ocf_lru_get_list(part, lru_list, true);
 	dirty_list = ocf_lru_get_list(part, lru_list, false);
 
+	OCF_JOURNAL_TRANSACTION_START(jrnl, ocf_journal_op_id_lru_clean_update);
+
 	OCF_METADATA_LRU_WR_LOCK(cline);
-	remove_lru_list(cache, clean_list, cline);
-	add_lru_head(cache, dirty_list, cline);
+
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_clean_update);
+
+	remove_lru_list(cache, clean_list, part->id, false, cline, op);
+	add_lru_head(cache, dirty_list, part->id, true, cline, op);
+
+	OCF_JOURNAL_END();
+
 	OCF_METADATA_LRU_WR_UNLOCK(cline);
+
+	OCF_JOURNAL_TRANSACTION_END(jrnl);
 }
 
 static ocf_cache_line_t next_phys_invalid(ocf_cache_t cache,
@@ -942,7 +1218,7 @@ void ocf_lru_populate(ocf_cache_t cache, ocf_cache_line_t num_free_clines)
 		lru_list = (cline % OCF_NUM_LRU_LISTS);
 		list = ocf_lru_get_list(&cache->free, lru_list, true);
 
-		add_lru_head(cache, list, cline);
+		add_lru_head(cache, list, PARTITION_FREELIST, true, cline, NULL);
 	}
 
 	/* we should have reached the last invalid cache line */
@@ -1053,3 +1329,48 @@ uint32_t ocf_lru_num_free(ocf_cache_t cache)
 {
 	return env_atomic_read(&cache->free.runtime->curr_size);
 }
+
+/* part->curr_size modifications are not tracked in journal, need to
+ * set correct value based on individual LRU lists occupancies */
+void ocf_lru_recover(ocf_cache_t cache)
+{
+	ocf_part_id_t part_id;
+	unsigned lru_list;
+	ocf_cache_line_t count, total;
+	unsigned dirty = 0;
+	struct ocf_part *part;
+	struct ocf_lru_list *list;
+	bool user;
+
+	total = 0;
+	for (part_id = 0; part_id <= OCF_NUM_PARTITIONS; part_id++)
+	{
+		user = (part_id <= OCF_USER_IO_CLASS_MAX);
+		part = user ? &cache->user_parts[part_id].part : &cache->free;
+
+		for (dirty = 0; dirty <= (user ? 1 : 0); dirty++) {
+			count = 0;
+			for (lru_list = 0; lru_list < OCF_NUM_LRU_LISTS; lru_list++) {
+				list = ocf_lru_get_list(part, lru_list, !dirty);
+				count += list->num_nodes;
+			}
+		}
+
+		if (env_atomic_read(&part->runtime->curr_size) != count) {
+			ocf_cache_log(cache, log_info,
+					"adjusting partition size %u -> %u\n",
+					env_atomic_read(&part->runtime->curr_size),
+					count);
+		}
+
+		env_atomic_set(&part->runtime->curr_size, count);
+
+		total += count;
+	}
+
+	if (total != ocf_metadata_collision_table_entries(cache)) {
+		ocf_cache_log(cache, log_err, "LRU lists size mismatch\n");
+		ENV_BUG_ON(1);
+	}
+}
+
