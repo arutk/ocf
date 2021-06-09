@@ -57,6 +57,7 @@ class UnitTestsSourcesGenerator(object):
     test_files_paths_list = []
 
     tested_files_paths_list = []
+    linked_file_paths_list = []
 
     includes_to_copy_dict = {}
 
@@ -82,12 +83,15 @@ class UnitTestsSourcesGenerator(object):
         self.set_framework_includes()
         self.set_files_with_tests_list()
         self.set_tested_files_paths_list()
+        self.set_linked_file_path_list()
 
         self.set_preprocessing_repo()
         self.set_sources_to_test_repo()
 
     def preprocessing(self):
-        tested_files_list = self.get_tested_files_paths_list()
+        preprocessed_files = self.remove_duplicates_from_list(
+                self.get_tested_files_paths_list() +
+                self.get_linked_file_path_list())
         project_includes = self.get_dirs_to_include_list()
         framework_includes = self.get_tests_internal_includes_list()
 
@@ -101,7 +105,7 @@ class UnitTestsSourcesGenerator(object):
 
         gcc_command_template += gcc_flags
 
-        for path in tested_files_list:
+        for path in preprocessed_files:
             preprocessing_dst = self.get_preprocessing_repo() \
                                 + self.get_relative_path(path, self.get_main_tested_dir())
             preprocessing_dst_dir = os.path.dirname(preprocessing_dst)
@@ -147,32 +151,58 @@ class UnitTestsSourcesGenerator(object):
         return wrap_file_path
 
     def is_env_function(self, name):
-        prefixes = ["env", "bug", "memcpy", "memset", "memcmp", "strnlen", "strncmp", "strncpy"]
+        prefixes = ["env", "bug", "memcpy", "memset", "memcmp", "strnlen",
+                "strncmp", "strncpy", "malloc", "free", "pthread_spin",
+                "pthread_mutex", "pthread_rwlock", "sem_",
+                "gettimeofday", "qsort", "usleep"]
 
         return list(filter(name.startswith, prefixes)) != []
 
     def prepare_autowraps(self, test_file_path, preprocessed_file_path):
-        functions_to_wrap = self.get_functions_calls(
-            self.get_sources_to_test_repo() + test_file_path)
+        effective_tested_file_path = self.get_sources_to_test_repo() + test_file_path
+        linked_files = [self.get_preprocessing_repo() + lf for lf in
+                self.get_linked_files_path(self.get_main_UT_dir() + test_file_path)]
+        definition_files = linked_files + [self.get_main_UT_dir() + test_file_path] + [effective_tested_file_path]
+
+        defined_functions = []
+        for f in definition_files:
+            defined_functions += [l.split()[0] for l in self.get_functions_list(f)]
+        defined_functions = self.remove_duplicates_from_list(defined_functions)
+
+        autowrapped_files = linked_files + [effective_tested_file_path]
+        callees = []
+        for f in autowrapped_files:
+            callees += list(self.get_functions_calls(f))
+        callees = self.remove_duplicates_from_list(callees)
+
         user_wraps = set(self.get_user_wraps(self.get_main_UT_dir() + test_file_path))
 
-        functions_to_wrap = functions_to_wrap - user_wraps
+        functions_to_wrap = list(set(callees) - set(user_wraps) - set(defined_functions))
+        functions_to_wrap = self.remove_duplicates_from_list(functions_to_wrap)
 
-        tags_list = self.get_functions_list(preprocessed_file_path, prototypes=True)
+        declaration_files = linked_files + [preprocessed_file_path];
 
+        wrapped = set()
         wrap_list = []
-
-        with open(preprocessed_file_path) as f:
-            code = f.readlines()
-            for function in functions_to_wrap:
-                if self.is_env_function(function):
-                    continue
+        for function in functions_to_wrap:
+            if self.is_env_function(function):
+                continue
+            for lf in declaration_files:
+                if function in wrapped:
+                    break
+                with open(lf) as f:
+                    tags_list = self.get_functions_list(lf, prototypes=True)
+                with open(lf) as f:
+                    code = f.readlines()
+                found = False
                 for tag in tags_list:
                     if function in tag:
+                        found = True
                         name, line = tag.split()
                         if name == function:
                             line = int(line)
                             wrap_list.append(self.get_function_wrap(code, line))
+                            wrapped.add(function)
                             break
 
         wrap_file_path = self.get_main_UT_dir() + self.get_autowrap_file_path(test_file_path)
@@ -247,8 +277,11 @@ class UnitTestsSourcesGenerator(object):
                 continue
 
             test_file_path = self.get_main_UT_dir() + test_path
+            linked_file_paths = [self.get_preprocessing_repo() + lf for lf in
+                    self.get_linked_files_path(test_file_path)]
 
-            cmake_buf = self.generate_test_cmake_buf(test_file_path, tested_file_path)
+            cmake_buf = self.generate_test_cmake_buf(test_file_path,
+                    tested_file_path, linked_file_paths)
 
             cmake_path = self.get_sources_to_test_repo() + test_path
             cmake_path = os.path.splitext(cmake_path)[0] + ".cmake"
@@ -259,12 +292,12 @@ class UnitTestsSourcesGenerator(object):
             cmake_lists_path = os.path.dirname(cmake_path) + os.sep
             self.update_cmakelists(cmake_lists_path, cmake_path)
 
-    def generate_test_cmake_buf(self, test_file_path, tested_file_path):
+    def generate_test_cmake_buf(self, test_file_path, tested_file_path, linked_file_paths):
         test_file_name = os.path.basename(test_file_path)
         target_name = os.path.splitext(test_file_name)[0]
 
         add_executable = "add_executable(" + target_name + " " + test_file_path + " " + \
-                         tested_file_path + ")\n"
+                         tested_file_path + "".join([" " + l for l in linked_file_paths]) + ")\n"
 
         libraries = "target_link_libraries(" + target_name + "  libcmocka.so ocf_env)\n"
 
@@ -310,12 +343,12 @@ class UnitTestsSourcesGenerator(object):
 
         return functions_list
 
-    def get_functions_to_leave(self, path):
+    def get_multiline_section(self, path, section_name):
         with open(path) as f:
             lines = f.readlines()
             buf = ''.join(lines)
 
-        tags_pattern = re.compile(r"<functions_to_leave>[\s\S]*</functions_to_leave>")
+        tags_pattern = re.compile(r"<" + section_name + r">[\s\S]*</" + section_name + r">")
 
         buf = re.findall(tags_pattern, buf)
         if not len(buf) > 0:
@@ -323,12 +356,22 @@ class UnitTestsSourcesGenerator(object):
 
         buf = buf[0]
 
-        buf = re.sub(r'<.*>', '', buf)
-        buf = re.sub(r'[^a-zA-Z0-9_\n]+', '', buf)
-
         ret = buf.split("\n")
+
+        ret = [re.sub(r'<.*>', '', s) for s in ret]
+        ret = [s.replace(r'*', '').strip() for s in ret]
         ret = [name for name in ret if name]
+
         return ret
+
+
+    def get_functions_to_leave(self, path):
+        functions = self.get_multiline_section(path, "functions_to_leave")
+
+        functions = [re.sub(r'[^a-zA-Z0-9_\n]+', '', f).strip() for f in functions]
+        functions = [f for f in functions if f]
+
+        return functions
 
     def get_functions_list(self, file_path, prototypes=None):
         ctags_path = self.get_ctags_path()
@@ -383,6 +426,19 @@ class UnitTestsSourcesGenerator(object):
 
     def get_tested_files_paths_list(self):
         return self.tested_files_paths_list
+
+    def set_linked_file_path_list(self):
+        test_files_list = self.get_files_with_tests_list()
+
+        for f in test_files_list:
+            for l in self.get_linked_files_path(self.get_main_UT_dir() + f):
+                self.linked_file_paths_list.append(self.get_main_tested_dir() + l)
+
+        self.linked_file_paths_list = self.remove_duplicates_from_list(
+            self.linked_file_paths_list)
+
+    def get_linked_file_path_list(self):
+        return self.linked_file_paths_list
 
     def get_files_with_tests_list(self):
         return self.test_files_paths_list
@@ -446,6 +502,9 @@ class UnitTestsSourcesGenerator(object):
             return buf
 
         return None
+
+    def get_linked_files_path(self, path):
+        return self.get_multiline_section(path, "files_to_link")
 
     def get_tested_function_name(self, test_file_path):
         with open(test_file_path) as f:
