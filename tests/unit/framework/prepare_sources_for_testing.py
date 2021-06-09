@@ -160,6 +160,16 @@ class UnitTestsSourcesGenerator(object):
 
         tags_list = self.get_functions_list(preprocessed_file_path, prototypes=True)
 
+        skip_wrap = []
+        for lf in  self.get_linked_files_path(self.get_main_UT_dir() + test_file_path):
+            functions_in_linked_file = self.get_functions_list(self.get_preprocessing_repo() + lf)
+            for wrapped_func in functions_to_wrap:
+                for linked_func in functions_in_linked_file:
+                    if wrapped_func in linked_func:
+                        skip_wrap.append(wrapped_func)
+
+        functions_to_wrap = functions_to_wrap - set(skip_wrap)
+
         wrap_list = []
 
         with open(preprocessed_file_path) as f:
@@ -310,12 +320,12 @@ class UnitTestsSourcesGenerator(object):
 
         return functions_list
 
-    def get_functions_to_leave(self, path):
+    def get_multiline_section(self, path, section_name):
         with open(path) as f:
             lines = f.readlines()
             buf = ''.join(lines)
 
-        tags_pattern = re.compile(r"<functions_to_leave>[\s\S]*</functions_to_leave>")
+        tags_pattern = re.compile(r"<" + section_name + r">[\s\S]*</" + section_name + r">")
 
         buf = re.findall(tags_pattern, buf)
         if not len(buf) > 0:
@@ -323,12 +333,22 @@ class UnitTestsSourcesGenerator(object):
 
         buf = buf[0]
 
-        buf = re.sub(r'<.*>', '', buf)
-        buf = re.sub(r'[^a-zA-Z0-9_\n]+', '', buf)
-
         ret = buf.split("\n")
+
+        ret = [re.sub(r'<.*>', '', s) for s in ret]
+        ret = [s.replace(r'*', '').strip() for s in ret]
         ret = [name for name in ret if name]
+
         return ret
+
+
+    def get_functions_to_leave(self, path):
+        functions = self.get_multiline_section(path, "functions_to_leave")
+
+        functions = [re.sub(r'[^a-zA-Z0-9_\n]+', '', f).strip() for f in functions]
+        functions = [f for f in functions if f]
+
+        return functions
 
     def get_functions_list(self, file_path, prototypes=None):
         ctags_path = self.get_ctags_path()
@@ -446,6 +466,9 @@ class UnitTestsSourcesGenerator(object):
             return buf
 
         return None
+
+    def get_linked_files_path(self, path):
+        return self.get_multiline_section(path, "files_to_link")
 
     def get_tested_function_name(self, test_file_path):
         with open(test_file_path) as f:
