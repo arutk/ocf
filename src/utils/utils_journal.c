@@ -181,73 +181,45 @@ static void ocf_journal_rollback_op(ocf_cache_t cache, ocf_journal_t jrnl,
 	struct ocf_journal_schema *schema = jrnl->schema;
 	ocf_journal_rollback_cb rollback;
 	ocf_jop_t child;
-	ocf_journal_idx_t next;
-	ocf_journal_idx_t children_idx[OCF_JOURNAL_MAX_SUB_OPS];
 	int i;
 
 	if (!is_started(op))
 		return;
 
-	rollback = schema->rollback_cb[op->id];
-
-#if 0
-	/* TODO: in case of concurrent metadata accesses composite operations
-	 *  might need to provide a rollback function of their own since
-	 *  sub-ops data is stale after releasing a mutex. However if composite
-	 *  ops rollback function is used, extra mechanisms must be implemented
-	 *  to assure rollback operation is crash-safe.
-	 */
-	if (is_finished(op)) {
-		rollback = schema->rollback_cb[op_id];
-		if (rollback) {
-			rollback(cache, op);
-			clear_finished(op);
-			clear_started(op);
-			return;
+	for (i = ocf_journal_get_op_count(schema, op->id) - 1; i >= 0; i--) {
+		child = get_op_by_idx(op, i);
+		clear_finished(child);
+		if (is_started(child)) {
+			rollback = schema->rollback_cb[child->id];
+			if (rollback)
+				rollback(cache, child);
+			clear_started(child);
 		}
-	}
-#else
-	if (rollback) {
-		clear_finished(op);
-		rollback(cache, op);
-		clear_started(op);
-		return;
-	}
-#endif
-
-	ENV_BUG_ON(schema->sub_op_count[op->id] == 0);
-
-	/* calculate children indexes to visit them in reverse order */
-	next = 1;
-	for (i = 0; i < schema->sub_op_count[op->id]; i++) {
-		children_idx[i] = next;
-		child = get_op_by_idx(op, next);
-		next += ocf_journal_get_op_count(jrnl->schema, child->id);
-	}
-
-	/* rollback child operations in reverse order */
-	for (i = schema->sub_op_count[op->id]; i >= 0; i--) {
-		child = get_op_by_idx(op, children_idx[i]);
-		ocf_journal_rollback_op(cache, jrnl, child);
 	}
 }
 
 void ocf_journal_rollback(ocf_cache_t cache, ocf_journal_t jrnl)
 {
-	ocf_journal_idx_t pos = jrnl->ring.hdr->started_idx;
-	ocf_journal_idx_t end = jrnl->ring.hdr->finished_idx;
+	ocf_journal_idx_t pos = jrnl->ring.hdr->finished_idx;
+	ocf_journal_idx_t end = jrnl->ring.hdr->started_idx;
 	ocf_jop_t op ;
 
 	while (pos != end || jrnl->ring.hdr->full) {
 		op = &jrnl->ring.buff[pos];
+
 		if (is_started(op))
 			ocf_journal_rollback_op(cache, jrnl, op);
-		ocf_journal_free_space(jrnl, op->ring_idx);
 
-		ENV_BUG_ON(pos == jrnl->ring.hdr->started_idx);
-		pos = jrnl->ring.hdr->started_idx;
+		while(!is_started(op) && pos != end) {
+			ocf_jurnal_clear_op(op);
+			pos = (pos + 1) % jrnl->ring.hdr->capacity;
+			op = &jrnl->ring.buff[pos];
+		}
+
+		ENV_BUG_ON(jrnl->ring.hdr->finished_idx == pos);
+		jrnl->ring.hdr->finished_idx = pos;
+		jrnl->ring.hdr->full = false;
 	}
-
 }
 
 
