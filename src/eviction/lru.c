@@ -105,7 +105,7 @@ static void balance_lru_list(ocf_cache_t cache, struct ocf_lru_list *list,
 }
 
 static struct ocf_lru_list *
-ocf_lru_rollback_balance_get_list(ocf_cache_t cache, ocf_jop_t op)
+ocf_lru_rollback_parent_get_list(ocf_cache_t cache, ocf_jop_t op)
 {
 	struct ocf_jdata_lru_list *list_data = &ocf_journal_op_get_parent(op)->
 			data.lru_list;
@@ -119,13 +119,30 @@ ocf_lru_rollback_balance_get_list(ocf_cache_t cache, ocf_jop_t op)
 
 void ocf_lru_rollback_insert_lru_head(ocf_cache_t cache, ocf_jop_t op)
 {
-	struct ocf_lru_list *list = ocf_lru_rollback_balance_get_list(cache,
+	struct ocf_lru_list *list = ocf_lru_rollback_parent_get_list(cache,
 			ocf_journal_op_get_parent(op));
-	ocf_cache_line_t head_idx = op->data.insert.head;
-	struct lru_eviction_policy_meta *head = ocf_get_lru(cache, head_idx);
+	struct lru_eviction_policy_meta *old_head, *node;
 
 	list->head = op->data.insert.head;
-	head->prev = end_marker;
+	if (list->head != end_marker) {
+		old_head = ocf_get_lru(cache, list->head);
+		old_head->prev = end_marker;
+	}
+
+	list->num_nodes = op->data.insert.num_nodes;
+
+	if (list->num_nodes == 0)
+		list->tail = end_marker;
+	else {
+		list->num_hot = list->num_nodes / 2;
+		if (!list->num_hot)
+			list->last_hot = end_marker;
+	}
+
+	node = ocf_get_lru(cache, op->data.insert.cline);
+	node->next = end_marker;
+	node->prev = end_marker;
+	node->hot = 0;
 }
 
 /* Adds the given collision_index to the _head_ of the LRU list */
@@ -200,31 +217,32 @@ void ocf_lru_rollback_remove_update_ptrs(ocf_cache_t cache, ocf_jop_t op)
 	ocf_cache_line_t cline = unlink_op->data.lru_unlink.cline;
 	ocf_cache_line_t prev = op->data.del_update_ptrs.prev;
 	ocf_cache_line_t next = op->data.del_update_ptrs.next;
-	struct lru_eviction_policy_meta *node_next, *node_prev;
+	struct lru_eviction_policy_meta *node_next, *node_prev, *node;
 	struct ocf_lru_list *list;
 
 	list = evp_get_cline_list(cache, cline);
 
 	if (prev == end_marker) {
 		/* list head was being removed */
-		list->head = next;
+		list->head = cline;
 	} else {
 		node_prev = ocf_get_lru(cache, prev);
-		node_prev->next = next;
+		node_prev->next = cline;
 	}
 
 	if (next == end_marker) {
 		/* list tail was being removed */
-		list->tail = prev;
+		list->tail = cline;
 	 } else {
 		node_next = ocf_get_lru(cache, next);
-		node_next->prev = prev;
+		node_next->prev = cline;
 	}
 
-	if (op->data.del_update_ptrs.curr_last_hot == cline)
-		list->last_hot = prev;
+	node = ocf_get_lru(cache, cline);
+	node->prev = prev;
+	node->next = next;
 
-	node_prev->next = next;
+	list->last_hot = op->data.del_update_ptrs.curr_last_hot;
 }
 
 /* update list global pointers and node neghbours to reflect removal */
@@ -285,10 +303,7 @@ void ocf_lru_rollback_remove_dec_count(ocf_cache_t cache, ocf_jop_t op)
 	struct ocf_lru_list *list;
 
 	list = evp_get_cline_list(cache, cline);
-	if (op->data.del_dec_count.is_hot) {
-		ENV_BUG_ON(op->data.del_dec_count.curr_hot_count == 0);
-		list->num_hot = op->data.del_dec_count.curr_hot_count;
-	}
+	list->num_hot = op->data.del_dec_count.curr_hot_count;
 
 	ENV_BUG_ON(op->data.del_dec_count.curr_node_count == 0);
 	list->num_nodes = op->data.del_dec_count.curr_node_count;
@@ -304,7 +319,7 @@ void ocf_lru_rollback_remove_clear_elem(ocf_cache_t cache, ocf_jop_t op)
 
 	node->prev = end_marker;
 	node->next = end_marker;
-	node->hot = false;
+	node->hot = op->data.del_clear_elem.is_hot;
 }
 
 /* Deletes the node with the given collision_index from the lru list */
@@ -331,8 +346,7 @@ static void remove_lru_list_nobalance(ocf_cache_t cache, struct ocf_lru_list *li
 
 	OCF_JOURNAL_START(ocf_journal_op_id_lru_dec_count,
 			.del_dec_count.curr_node_count = list->num_nodes,
-			.del_dec_count.curr_hot_count = list->num_hot,
-			.del_dec_count.is_hot = node->hot);
+			.del_dec_count.curr_hot_count = list->num_hot);
 
 	--list->num_nodes;
 	if (node->hot)
@@ -340,7 +354,8 @@ static void remove_lru_list_nobalance(ocf_cache_t cache, struct ocf_lru_list *li
 
 	OCF_JOURNAL_END();
 
-	OCF_JOURNAL_START(ocf_journal_op_id_lru_clear_elem);
+	OCF_JOURNAL_START(ocf_journal_op_id_lru_clear_elem,
+			.del_clear_elem.is_hot = node->hot);
 
 	node->next = end_marker;
 	node->prev = end_marker;
@@ -384,6 +399,13 @@ static void evp_lru_set_hot(ocf_cache_t cache, struct ocf_lru_list *list,
 	balance_lru_list(cache, list, op);
 
 	OCF_JOURNAL_END();
+}
+
+static inline struct ocf_lru_list *ocf_lru_rollback_balance_get_list(
+		ocf_cache_t cache, ocf_jop_t op)
+{
+	return ocf_lru_rollback_parent_get_list(cache,
+			ocf_journal_op_get_parent(op));
 }
 
 void ocf_lru_rollback_balance_update_ctr(ocf_cache_t cache, ocf_jop_t op)
@@ -441,28 +463,6 @@ static void evp_lru_move(ocf_cache_t cache, ocf_cache_line_t cline, bool clean,
 	remove_lru_list(cache, src_list, src_part_id, clean, cline, op);
 	add_lru_head(cache, dst_list, dst_part_id, clean, cline, op);
 }
-
-void ocf_lru_rollback_move(ocf_cache_t cache, ocf_jop_t op)
-{
-	ocf_part_id_t src_part_id = op->data.lru_move.src_part;
-	ocf_part_id_t dst_part_id = op->data.lru_move.dst_part;
-	bool clean = op->data.lru_list.clean;
-	ocf_cache_line_t cline = op->data.lru_list.cline;
-	uint32_t ev_list = (cline % OCF_NUM_EVICTION_LISTS);
-	struct ocf_part_runtime *src_part = (src_part_id == PARTITION_INVALID) ?
-			cache->free : cache->user_parts[src_part_id].runtime;
-	struct ocf_part_runtime *dst_part = (dst_part_id == PARTITION_INVALID) ?
-			cache->free : cache->user_parts[dst_part_id].runtime;
-	struct ocf_lru_list *src_list = evp_lru_get_list(src_part, ev_list,
-			clean);
-	struct ocf_lru_list *dst_list = evp_lru_get_list(src_part, ev_list,
-			clean);
-
-	/* reverse order as we are rolling back */
-	evp_lru_move(cache, cline, clean, dst_part, dst_list, src_part, src_list,
-			dst_part_id, src_part_id, NULL);
-}
-
 
 static void evp_lru_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
 		struct ocf_part_runtime *src_part, ocf_part_id_t src_part_id,

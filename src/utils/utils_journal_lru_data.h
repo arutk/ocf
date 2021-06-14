@@ -31,11 +31,9 @@ struct ocf_jdata_lru_del_update_pointers {
 struct ocf_jdata_lru_del_dec_count {
 	unsigned curr_node_count;
 	unsigned curr_hot_count;
-	bool is_hot;
 };
 
-struct ocf_jdata_lru_del_dec_hot {
-	unsigned curr_count;
+struct ocf_jdata_lru_del_clear_elem {
 	bool is_hot;
 };
 

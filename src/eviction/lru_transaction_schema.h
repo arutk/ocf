@@ -6,9 +6,7 @@ void ocf_lru_rollback_remove_clear_elem(ocf_cache_t cache, ocf_jop_t op);
 void ocf_lru_rollback_balance_update_ctr(ocf_cache_t cache, ocf_jop_t op);
 void ocf_lru_rollback_balance_update_last(ocf_cache_t cache, ocf_jop_t op);
 void ocf_lru_rollback_balance_set_hot(ocf_cache_t cache, ocf_jop_t op);
-void ocf_lru_rollback_move(ocf_cache_t cache, ocf_jop_t op);
 void ocf_lru_rollback_insert_lru_head(ocf_cache_t cache, ocf_jop_t op);
-void ocf_lru_rollback_set_hot(ocf_cache_t cache, ocf_jop_t op);
 
 static inline void ocf_lru_transaction_schema_init(
 		struct ocf_journal_schema *schema)
@@ -62,15 +60,4 @@ static inline void ocf_lru_transaction_schema_init(
 			ocf_lru_rollback_balance_set_hot);
 	declare_rollback_cb(schema, ocf_journal_op_id_lru_add_insert,
 			ocf_lru_rollback_insert_lru_head);
-
-	/* composit operations with a dedicated rollback function due to
-	 * locking dependencies (sub-ops data potentilaly stale after marking
-	 * master op as finished)
-	 */
-	declare_rollback_cb(schema, ocf_journal_op_id_lru_repart,
-			ocf_lru_rollback_move);
-	declare_rollback_cb(schema, ocf_journal_op_id_lru_set_hot,
-			ocf_lru_rollback_set_hot);
-
-
 }

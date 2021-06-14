@@ -19,7 +19,7 @@ struct ocf_jdata {
 		struct ocf_jdata_lru_move lru_move;
 		struct ocf_jdata_lru_del_update_pointers del_update_ptrs;
 		struct ocf_jdata_lru_del_dec_count del_dec_count;
-		struct ocf_jdata_lru_del_dec_hot del_dec_hot;
+		struct ocf_jdata_lru_del_clear_elem del_clear_elem;
 		struct ocf_jdata_val_update balance_update_ctr;
 		struct ocf_jdata_val_update balance_update_last;
 		struct ocf_jdata_val_update swap;
