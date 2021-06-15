@@ -31,32 +31,6 @@ union eviction_policy_meta {
 	struct lru_eviction_policy_meta lru;
 } __attribute__((packed));
 
-/* the caller must hold the metadata lock for all operations
- *
- * For range operations the caller can:
- * set core_id to -1 to purge the whole cache device
- * set core_id to -2 to purge the whole cache partition
- */
-struct eviction_policy_ops {
-	void (*init_cline)(ocf_cache_t cache, ocf_cache_line_t cline);
-	void (*rm_cline)(ocf_cache_t cache,
-			ocf_cache_line_t cline);
-	bool (*can_evict)(ocf_cache_t cache);
-	uint32_t (*req_clines)(struct ocf_request *req, struct ocf_part *part,
-			uint32_t cline_no);
-	void (*hot_cline)(ocf_cache_t cache, ocf_cache_line_t cline);
-	void (*init_evp)(ocf_cache_t cache, struct ocf_part *part);
-	void (*dirty_cline)(ocf_cache_t cache, struct ocf_part *part,
-			ocf_cache_line_t cline);
-	void (*clean_cline)(ocf_cache_t cache, struct ocf_part *part,
-			ocf_cache_line_t cline);
-	void (*flush_dirty)(ocf_cache_t cache, struct ocf_user_part *user_part,
-			ocf_queue_t io_queue, uint32_t count);
-	const char *name;
-};
-
-extern struct eviction_policy_ops evict_policy_ops[ocf_eviction_max];
-
 /*
  * Deallocates space according to eviction priorities.
  *

@@ -1,5 +1,6 @@
 /*
  * Copyright(c) 2012-2021 Intel Corporation
+
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -103,7 +104,6 @@ void set_cache_line_clean(struct ocf_cache *cache, uint8_t start_bit,
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, line);
 	struct ocf_part *part = &cache->parts[part_id];
-	uint8_t evp_type = cache->conf_meta->eviction_policy_type;
 	bool line_is_clean;
 
 	if (metadata_clear_dirty_sec_changed(cache, line, start_bit, end_bit,
@@ -130,12 +130,7 @@ void set_cache_line_clean(struct ocf_cache *cache, uint8_t start_bit,
 			 */
 			env_atomic_dec(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
-
-			if (likely(evict_policy_ops[evp_type].clean_cline)) {
-				evict_policy_ops[evp_type].clean_cline(cache,
-						part, line);
-			}
-
+			evp_lru_clean_cline(cache, part, line);
 			ocf_purge_cleaning_policy(cache, line);
 		}
 	}
@@ -148,7 +143,6 @@ void set_cache_line_dirty(struct ocf_cache *cache, uint8_t start_bit,
 	ocf_cache_line_t line = req->map[map_idx].coll_idx;
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, line);
 	struct ocf_part *part = cache->user_parts[part_id].part;
-	uint8_t evp_type = cache->conf_meta->eviction_policy_type;
 	bool line_was_dirty;
 
 	if (metadata_set_dirty_sec_changed(cache, line, start_bit, end_bit,
@@ -175,11 +169,7 @@ void set_cache_line_dirty(struct ocf_cache *cache, uint8_t start_bit,
 			 */
 			env_atomic_inc(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
-
-			if (likely(evict_policy_ops[evp_type].dirty_cline)) {
-				evict_policy_ops[evp_type].dirty_cline(cache,
-						part, line);
-			}
+			evp_lru_dirty_cline(cache, part, line);
 		}
 	}
 

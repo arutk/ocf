@@ -14,7 +14,7 @@ struct ocf_part_runtime;
 struct ocf_part_cleaning_ctx;
 struct ocf_request;
 
-void evp_lru_init_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
+void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void evp_lru_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 bool evp_lru_can_evict(struct ocf_cache *cache);
 uint32_t evp_lru_req_clines(struct ocf_request *req,
