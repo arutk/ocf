@@ -285,10 +285,13 @@ void evp_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
 	struct ocf_part *part = &cache->parts[part_id];
 
+	OCF_METADATA_EVICTION_WR_LOCK(cline);
+
 	list = evp_get_cline_list(cache, cline);
 	free = evp_lru_get_list(&cache->free, ev_list, true);
-
 	evp_lru_move(cache, cline, part, list, &cache->free, free);
+
+	OCF_METADATA_EVICTION_WR_UNLOCK(cline);
 }
 
 static void evp_lru_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
