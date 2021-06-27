@@ -72,23 +72,6 @@
 
 #include "ocf_lru.c/lru_journal_generated_wraps.c"
 
-/* dummy wraps for functions referenced in linked file utils_journal.c
- * TODO: generate these wraps automatically/
- */
-ocf_volume_t __wrap_ocf_core_get_volume(ocf_core_t core) {return NULL;}
-const struct ocf_volume_uuid *__wrap_ocf_volume_get_uuid(ocf_volume_t volume) {return NULL;}
-ocf_volume_t __wrap_ocf_core_get_front_volume(ocf_core_t core) {return NULL;}
-struct ocf_io *__wrap_ocf_volume_new_io(ocf_volume_t volume, ocf_queue_t queue,
-		uint64_t addr, uint32_t bytes, uint32_t dir,
-		uint32_t io_class, uint64_t flags)
-{
-	return NULL;
-}
-void __wrap_ocf_volume_submit_io(struct ocf_io *io) {}
-void __wrap_ocf_volume_submit_flush(struct ocf_io *io) {}
-void __wrap_ocf_volume_submit_discard(struct ocf_io *io) {}
-
-
 // explicit declarations for wrapped functions
 ocf_jop_t __real_ocf_journal_start_op(ocf_jop_t op,
 		enum ocf_journal_op_id op_id);
