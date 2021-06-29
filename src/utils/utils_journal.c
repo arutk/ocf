@@ -1,4 +1,4 @@
-/*
+*
  * Copyright(c) 2021-2021 Intel Corporation
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -10,9 +10,11 @@
 
 static inline void mark_started(ocf_jop_t op)
 {
+	OCF_UT_HOOK(mark_started_begin);
 	env_smp_wmb();
 	op->started = true;
 	env_smp_wmb();
+	OCF_UT_HOOK(mark_started_end);
 }
 
 static inline void clear_started(ocf_jop_t op)
