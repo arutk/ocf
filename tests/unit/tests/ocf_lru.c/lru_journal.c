@@ -205,6 +205,12 @@ void request_recovery_snapshot(int step)
 	request_snapshot(step, true);
 }
 
+void clear_snapshot()
+{
+	snapshot.requested = false;
+	snapshot.taken = false;
+}
+
 void try_snapshot(bool recovery)
 {
 	if (!snapshot.requested || snapshot.recovery != recovery)
@@ -224,12 +230,13 @@ void metadata_restore_from_snapshot(struct test_metadata_state *snapshot)
 	curr_state = *snapshot;
 }
 
+int __ocf_ut_hook_status_op() { try_snapshot(true); }
+
 ocf_jop_t __wrap_ocf_journal_start_op(ocf_jop_t op,
 		enum ocf_journal_op_id op_id)
 {
 	ocf_jop_t ret;
 
-	try_snapshot(false);
 	ret = __real_ocf_journal_start_op(op, op_id);
 	try_snapshot(false);
 
@@ -356,33 +363,96 @@ void verify_curr_metadata_state(struct test_metadata_state *snapshot)
 	ret = memcmp(&curr_state, snapshot, sizeof(curr_state) -
 			sizeof(curr_state.journal_buf));
 	if (ret) {
-		ret = memcmp(&curr_state.lru, snapshot, sizeof(curr_state.lru));
+		ret = memcmp(&curr_state.lru, &snapshot->lru, sizeof(curr_state.lru));
 		assert_int_equal(ret, 0);
-		ret = memcmp(&curr_state.part_runtime, snapshot, sizeof(curr_state.part_runtime));
+		ret = memcmp(&curr_state.part_runtime, &snapshot->part_runtime, sizeof(curr_state.part_runtime));
 		assert_int_equal(ret, 0);
 	}
 
 	assert_int_equal(ret, 0);
 }
 
+/* attempt to recover from prev_crash_snapshot with simulated crash at various
+ * points during recovery. After each recovery the state should be restored to
+ * @initial_snashot. If num_crashes > 1 function will call itself recursively
+ * to introduce more crashes and attempt to recover yet again */
+void recover_with_crash(struct test_metadata_state *prev_crash_snapshot,
+		struct test_metadata_state *initial_snapshot, int num_crashes)
+{
+	ocf_journal_t journal;
+	unsigned recovery_crash_step = 0;
+	bool recovery_interrupted;
+	struct test_metadata_state _next_crash_state = {};
+	struct test_metadata_state *next_crash_state = &_next_crash_state;
+	bool snapshot_taken;
+	int ret;
+	unsigned cnt = 0;
+
+	do {
+		/* restore metadata (including journal) to the state at which
+		 * previous simulated crash occured (during runtime transaction
+		 * or recovery) */
+		metadata_restore_from_snapshot(prev_crash_snapshot);
+
+		/* now curr_state contains metadata and journal
+		 * snapshot at step no 'runtime_crash_step'
+		 */
+		/* load journal */
+		ret = ocf_journal_init(cache, g_schema, curr_state.journal_buf,
+				sizeof(curr_state.journal_buf), &journal);
+		assert_int_equal(ret, 0);
+
+		if (num_crashes > 0) {
+			/* capture metadat snapshot at some point during
+			 * recovery to simulate interruptd recocery */
+			request_recovery_snapshot(recovery_crash_step);
+		} else {
+			clear_snapshot();
+		}
+
+		/* rollback transaction */
+		ocf_journal_recover(cache, journal);
+
+		/* make sure journal is empty after recovery */
+		assert_int_equal(journal->ring.hdr->started_idx, journal->ring.hdr->finished_idx);
+		assert_int_equal(journal->ring.hdr->full, false);
+
+		/* discard journal object */
+		free(journal);
+
+		/* metadata should be restored to initial state
+		 * except for the journal itself */
+		verify_curr_metadata_state(initial_snapshot);
+
+		snapshot_taken = snapshot.taken;
+		if (snapshot_taken) {
+			/* only attempt recovery if the latest spapshot actually differs from the old one*/
+			if (0 != memcmp(&state_snapshot, next_crash_state, sizeof(state_snapshot))) {
+				cnt++;
+				*next_crash_state = state_snapshot;
+
+				/* attempt to continue interrupted recovery */
+				recover_with_crash(next_crash_state, initial_snapshot, num_crashes - 1);
+			}
+		}
+
+		++recovery_crash_step;
+	} while(snapshot_taken);
+}
+
 void lru_journal_test_step(ocf_journal_t journal, enum ocf_journal_op_id op_id,
 		int idx, test_step_cb_t step)
 {
 	ocf_jop_t op;
-	unsigned runtime_crash_step, recovery_crash_step;
+	unsigned runtime_crash_step;
 	int ret;
-	bool recovered;
-	bool recovery_interrupted;
 	struct test_metadata_state initial_state;
-	struct test_metadata_state runtime_crash_state;
-	struct test_metadata_state recovery_crash_state;
+	struct test_metadata_state runtime_crash_state = {};
 
 	initial_state = curr_state;
 
 	runtime_crash_step = 0;
 	do {
-		recovered = false;
-
 		/* capture metadata snapshot at some moment during the
 		 * transaction to simulate interrupted metadata transaction*/
 		request_runtime_snapshot(runtime_crash_step);
@@ -401,70 +471,14 @@ void lru_journal_test_step(ocf_journal_t journal, enum ocf_journal_op_id op_id,
 			break;
 		}
 
-		runtime_crash_state = state_snapshot;
-
-		recovery_crash_step = 0;
-		recovery_interrupted = false;
-		do {
-			/* restore metadata (including journal) to the state at which
-			 * runtime (mid-transaction) snapshot was taken */
-			metadata_restore_from_snapshot(&runtime_crash_state);
-
-			/* now curr_state contains metadata and journal
-			 * snapshot at step no 'runtime_crash_step'
-			 */
-			/* load journal */
-			ret = ocf_journal_init(cache, g_schema, curr_state.journal_buf,
-					sizeof(curr_state.journal_buf), &journal);
-			assert_int_equal(ret, 0);
-
-			/* only attempt to recover metadata from journal if the transaction is
-			 * not finished (it would be finished when we take snapshot after all the steps)
-			 */
-			if (journal->ring.hdr->started_idx ==  journal->ring.hdr->finished_idx ||
-					is_finished(&journal->ring.buff[journal->ring.hdr->finished_idx])) {
-				break;
-			}
-
-			/* capture metadat snapshot at some point during
-			 * recovery to simulate interrupte recocery */
-			request_recovery_snapshot(recovery_crash_step);
-
-			/* rollback transaction */
-			ocf_journal_recover(cache, journal);
-			recovered = true;
-
-			/* metadata should be restored to initial state
-			 * except for the journal itself */
-			verify_curr_metadata_state(&initial_state);
-
-			if (snapshot.taken) {
-				recovery_interrupted = true;
-				recovery_crash_state = state_snapshot;
-
-				/* restore metadata to the state of recovery
-				 * crash */
-				metadata_restore_from_snapshot(&recovery_crash_state);
-
-				/* init journal */
-				free(journal);
-				ret = ocf_journal_init(cache, g_schema, curr_state.journal_buf,
-					sizeof(curr_state.journal_buf), &journal);
-				assert_int_equal(ret, 0);
-
-				/* attempt to continue interrupted recovery */
-				ocf_journal_recover(cache, journal);
-
-				/* metadata should be restored to initial state
-				 * except for the journal itself */
-				verify_curr_metadata_state(&initial_state);
-			}
-
-			++recovery_crash_step;
-		} while(recovery_interrupted);
+		/* only attempt recovery if the latest snapshot differs from the previous one */
+		if (0 != memcmp(&state_snapshot, &runtime_crash_state, sizeof(state_snapshot))) {
+			runtime_crash_state = state_snapshot;
+			recover_with_crash(&runtime_crash_state, &initial_state, 2);
+		}
 
 		++runtime_crash_step;
-	} while (recovered);
+	} while (true);
 
 	/* commit transaction and continue to next test iteration */
 	OCF_JOURNAL_TRANSACTION_END(journal);

@@ -95,7 +95,7 @@ class UnitTestsSourcesGenerator(object):
         project_includes = self.get_dirs_to_include_list()
         framework_includes = self.get_tests_internal_includes_list()
 
-        gcc_flags = " -fno-inline -Dstatic= -Dinline= -E "
+        gcc_flags = " -fno-inline -Dstatic= -Dinline= -DOCF_UT= -E "
         gcc_command_template = "gcc "
         for path in project_includes:
             gcc_command_template += " -I " + path + " "
@@ -305,7 +305,7 @@ class UnitTestsSourcesGenerator(object):
 
         tgt_properties = "set_target_properties(" + target_name + "\n" + \
                          "PROPERTIES\n" + \
-                         "COMPILE_FLAGS \"-fno-inline -Dstatic= -Dinline= -w \"\n"
+                         "COMPILE_FLAGS \"-fno-inline -Dstatic= -Dinline= -DOCF_UT -w \"\n"
 
         link_flags = self.generate_cmake_link_flags(test_file_path)
         tgt_properties += link_flags + ")"

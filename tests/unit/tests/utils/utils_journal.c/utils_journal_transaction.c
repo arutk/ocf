@@ -50,6 +50,8 @@
 
 #include "utils/utils_journal.c/utils_journal_generated_wraps.c"
 
+int __ocf_ut_hook_status_op() {}
+
 void __wrap___assert_fail (const char *__assertion, const char *__file,
       unsigned int __line, const char *__function)
 {

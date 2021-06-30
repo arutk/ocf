@@ -1,4 +1,4 @@
-*
+/*
  * Copyright(c) 2021-2021 Intel Corporation
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -7,57 +7,41 @@
 #include "ocf_env.h"
 #include "utils_journal.h"
 #include "../eviction/lru_transaction_schema.h"
+#include "utils_ut.h"
 
-static inline void mark_started(ocf_jop_t op)
-{
-	OCF_UT_HOOK(mark_started_begin);
-	env_smp_wmb();
-	op->started = true;
-	env_smp_wmb();
-	OCF_UT_HOOK(mark_started_end);
+#define status_setter_function(name, field, val) \
+static inline void name(ocf_jop_t op) \
+{ \
+	OCF_UT_HOOK(status_op); \
+	env_smp_wmb(); \
+	op->field = val; \
+	env_smp_wmb(); \
+	OCF_UT_HOOK(status_op); \
 }
 
-static inline void clear_started(ocf_jop_t op)
-{
-	env_smp_wmb();
-	op->started = false;
-	env_smp_wmb();
+#define status_getter_function(name, field) \
+static inline bool name(ocf_jop_t op) \
+{ \
+	bool ret; \
+	\
+	OCF_UT_HOOK(status_op); \
+	env_smp_rmb(); \
+	ret = op->field; \
+	env_smp_rmb(); \
+	OCF_UT_HOOK(status_op); \
+	\
+	return ret; \
 }
 
-static inline bool is_started(ocf_jop_t op)
-{
-	bool ret;
+/* mark/clear/is started() */
+status_setter_function(mark_started, started, true)
+status_setter_function(clear_started, started, false)
+status_getter_function(is_started, started)
 
-	env_smp_rmb();
-	ret = op->started;
-	env_smp_rmb();
-
-	return ret;
-}
-static inline void mark_finished(ocf_jop_t op)
-{
-	env_smp_wmb();
-	op->finished = true;
-	env_smp_wmb();
-}
-
-static inline void clear_finished(ocf_jop_t op)
-{
-	env_smp_wmb();
-	op->finished = false;
-	env_smp_wmb();
-}
-
-static inline bool is_finished(ocf_jop_t op)
-{
-	bool ret;
-
-	env_smp_rmb();
-	ret = op->finished;
-	env_smp_rmb();
-
-	return ret;
-}
+/* mark/clear/is finished() */
+status_setter_function(mark_finished, finished, true)
+status_setter_function(clear_finished, finished, false);
+status_getter_function(is_finished, finished)
 
 static inline ocf_jop_t get_op_by_idx(ocf_jop_t op,
 		int idx)
@@ -471,7 +455,7 @@ int ocf_journal_init(ocf_cache_t cache, struct ocf_journal_schema *schema,
 	capacity = ocf_journal_capacity(buf_size);
 	ENV_BUG_ON(2ULL << (sizeof(tmp->ring.hdr->started_idx) * 8) <= capacity);
 
-	tmp->ring.hdr = buf;
+	tmp->ring.hdr = (void *)buf;
 	tmp->ring.buff = &tmp->ring.hdr->ring[0];
 	tmp->buf_size = buf_size;
 
