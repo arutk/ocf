@@ -64,7 +64,6 @@ def test_load_cache_no_preexisting_data(pyocf_ctx):
     with pytest.raises(OcfError, match="OCF_ERR_NO_METADATA"):
         cache = Cache.load_from_device(cache_device)
 
-
 def test_load_cache(pyocf_ctx):
     cache_device = RamVolume(S.from_MiB(50))
 
@@ -84,3 +83,41 @@ def test_load_cache_recovery(pyocf_ctx):
     cache.stop()
 
     cache = Cache.load_from_device(device_copy)
+
+
+def test_load_cache_with_cores(pyocf_ctx):
+    cache_device = RamVolume(S.from_MiB(30))
+    core_device = RamVolume(S.from_MiB(30))
+
+    cache = Cache.start_on_device(cache_device)
+    core = Core.using_device(core_device)
+
+    cache.add_core(core)
+
+    write_data = Data.from_string("This is test data")
+    io = core.new_io(cache.get_default_queue(), S.from_sector(3).B,
+                     write_data.size, IoDir.WRITE, 0, 0)
+    io.set_data(write_data)
+
+    cmpl = OcfCompletion([("err", c_int)])
+    io.callback = cmpl.callback
+    io.submit()
+    cmpl.wait()
+
+    cache.stop()
+
+    cache = Cache.load_from_device(cache_device, open_cores = False)
+    cache.add_core(core, try_add=True)
+
+    read_data = Data(write_data.size)
+    io = core.new_io(cache.get_default_queue(), S.from_sector(3).B,
+                     read_data.size, IoDir.READ, 0, 0)
+    io.set_data(read_data)
+
+    cmpl = OcfCompletion([("err", c_int)])
+    io.callback = cmpl.callback
+    io.submit()
+    cmpl.wait()
+
+    assert read_data.md5() == write_data.md5()
+    assert core.exp_obj_md5() == core_device.md5()
