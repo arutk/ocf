@@ -12,6 +12,7 @@
 #include "data.h"
 #include "ctx.h"
 #include "queue_thread.h"
+#include "volume.h"
 
 /*
  * Cache private data. Used to share information between async contexts.
@@ -90,7 +91,7 @@ int initialize_cache(ocf_ctx_t ctx, ocf_cache_t *cache)
 
 	/* Cache configuration */
 	ocf_mngt_cache_config_set_default(&cache_cfg);
-	cache_cfg.metadata_volatile = true;
+	cache_cfg.metadata_volatile = false;
 
 	/* Cache deivce (volume) configuration */
 	ocf_mngt_cache_device_config_set_default(&device_cfg);
@@ -145,11 +146,19 @@ int initialize_cache(ocf_ctx_t ctx, ocf_cache_t *cache)
 	if (ret)
 		goto err_cache;
 
-	/* Attach volume to cache */
-	ocf_mngt_cache_attach(*cache, &device_cfg, simple_complete, &context);
-	sem_wait(&context.sem);
-	if (ret)
+	if (need_reload_cache()) {
+		ocf_mngt_cache_load(*cache, &device_cfg, simple_complete, &context);
+		sem_wait(&context.sem);
+	} else
+		/* Attach volume to cache */
+		ocf_mngt_cache_attach(*cache, &device_cfg, simple_complete, &context);
+		sem_wait(&context.sem);
+	}
+
+	if (ret) {
+		printf("reload/attach cache failed\n");
 		goto err_cache;
+	}
 
 	return 0;
 
@@ -214,6 +223,8 @@ int initialize_core(ocf_cache_t cache, ocf_core_t *core)
 	ret = ocf_uuid_set_str(&core_cfg.uuid, "core");
 	if (ret)
 		goto err_sem;
+
+	core_cfg.try_add = need_reload_cache();
 
 	/* Add core to cache */
 	ocf_mngt_cache_add_core(cache, &core_cfg, add_core_complete, &context);
