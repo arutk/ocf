@@ -7,13 +7,17 @@ OCFDIR=../../
 SRCDIR=src/
 INCDIR=include/
 
-SRC=$(shell find ${SRCDIR} -name \*.c)
-OBJS = $(patsubst %.c, %.o, $(SRC))
+CSRC=$(shell find ${SRCDIR} -name \*.c)
+COBJS = $(patsubst %.c, %.o, $(CSRC))
+CPPSRC=$(shell find ${SRCDIR} -name \*.cpp)
+CPPOBJS += $(patsubst %.cpp, %.o, $(CPPSRC))
+OBJS=$(COBJS) $(CPPOBJS)
 PROGRAM=simple
 
 CC = gcc
 CFLAGS = -g -Wall -I${INCDIR} -I${SRCDIR}/ocf/env/
-LDFLAGS = -lm -lz -pthread
+CXXFLAGS = -std=c++11 -g -Wall -I${INCDIR} -I${SRCDIR}/ocf/env/
+LDFLAGS = -lm -lz -pthread -lstdc++
 
 all: sync
 	$(MAKE) $(PROGRAM)
