@@ -149,7 +149,7 @@ int initialize_cache(ocf_ctx_t ctx, ocf_cache_t *cache)
 	if (need_reload_cache()) {
 		ocf_mngt_cache_load(*cache, &device_cfg, simple_complete, &context);
 		sem_wait(&context.sem);
-	} else
+	} else {
 		/* Attach volume to cache */
 		ocf_mngt_cache_attach(*cache, &device_cfg, simple_complete, &context);
 		sem_wait(&context.sem);

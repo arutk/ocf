@@ -5,14 +5,6 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 int initialize_threads(struct ocf_queue *mngt_queue, struct ocf_queue *io_queue);
 void queue_thread_kick(ocf_queue_t q);
 void queue_thread_stop(ocf_queue_t q);
-
-#ifdef __cplusplus
-}
-#endif
