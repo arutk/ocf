@@ -200,9 +200,12 @@ static void add_core_complete(ocf_cache_t cache, ocf_core_t core,
  */
 int initialize_core(ocf_cache_t cache, ocf_core_t *core)
 {
-	struct ocf_mngt_core_config core_cfg = { };
+	struct ocf_mngt_core_config core_cfg = {.name = "core1"};
 	struct add_core_context context;
 	int ret;
+
+	if (need_reload_cache())
+		return ocf_core_get_by_name(cache, core_cfg.name, sizeof(core_cfg.name), core);
 
 	/* Initialize completion semaphore */
 	ret = sem_init(&context.sem, 0, 0);
@@ -218,13 +221,10 @@ int initialize_core(ocf_cache_t cache, ocf_core_t *core)
 
 	/* Core configuration */
 	ocf_mngt_core_config_set_default(&core_cfg);
-	strcpy(core_cfg.name, "core1");
 	core_cfg.volume_type = VOL_TYPE;
 	ret = ocf_uuid_set_str(&core_cfg.uuid, "core");
 	if (ret)
 		goto err_sem;
-
-	core_cfg.try_add = need_reload_cache();
 
 	/* Add core to cache */
 	ocf_mngt_cache_add_core(cache, &core_cfg, add_core_complete, &context);
