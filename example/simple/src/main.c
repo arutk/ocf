@@ -340,14 +340,6 @@ void perform_workload(ocf_core_t core)
 	 */
 }
 
-static void remove_core_complete(void *priv, int error)
-{
-	struct simple_context *context = priv;
-
-	*context->error = error;
-	sem_post(&context->sem);
-}
-
 int main(int argc, char *argv[])
 {
 	struct cache_priv *cache_priv;
@@ -377,12 +369,6 @@ int main(int argc, char *argv[])
 
 	/* Do some actual io operations */
 	perform_workload(core1);
-
-	/* Remove core from cache */
-	ocf_mngt_cache_remove_core(core1, remove_core_complete, &context);
-	sem_wait(&context.sem);
-	if (ret)
-		error("Unable to remove core\n");
 
 	/* Stop cache */
 	ocf_mngt_cache_stop(cache1, simple_complete, &context);
