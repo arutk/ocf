@@ -72,23 +72,25 @@ static void volume_close(ocf_volume_t volume)
  */
 static void volume_submit_io(struct ocf_io *io)
 {
+	struct myvolume_io *myvolume_io = ocf_io_get_priv(io);
 	struct volume_data *data;
 	struct myvolume *myvolume;
+	uint32_t offset = myvolume_io->offset;
 
 	data = ocf_io_get_data(io);
 	myvolume = ocf_volume_get_priv(ocf_io_get_volume(io));
 
     if (strcmp(myvolume->name, "cache") == 0) {
         if (io->dir == OCF_WRITE) {
-            pwrite(cache_fd, (uint8_t*) data->ptr + data->offset, io->bytes, io->addr);
+            pwrite(cache_fd, (uint8_t*) data->ptr + offset, io->bytes, io->addr);
         } else {
-            pread(cache_fd, (uint8_t*) data->ptr + data->offset, io->bytes, io->addr);
+            pread(cache_fd, (uint8_t*) data->ptr + offset, io->bytes, io->addr);
         }
     } else {
         if (io->dir == OCF_WRITE) {
-            pwrite(core_fd, (uint8_t*) data->ptr + data->offset, io->bytes, io->addr);
+            pwrite(core_fd, (uint8_t*) data->ptr + offset, io->bytes, io->addr);
         } else {
-            pread(core_fd, (uint8_t*) data->ptr + data->offset, io->bytes, io->addr);
+            pread(core_fd, (uint8_t*) data->ptr + offset, io->bytes, io->addr);
         }
     }
 
