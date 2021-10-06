@@ -127,6 +127,8 @@ typedef enum {
 	ocf_cache_state_passive = 4,     //!< ocf_cache_state_passive
 		/*!< OCF is currently in passive mode */
 
+	ocf_cache_state_failover = 5,
+
 	ocf_cache_state_max              //!< ocf_cache_state_max
 		/*!< Stopper of cache state enumerator */
 } ocf_cache_state_t;

@@ -536,6 +536,10 @@ void ocf_mngt_cache_bind(ocf_cache_t cache,
 		struct ocf_mngt_cache_device_config *cfg,
 		ocf_mngt_cache_bind_end_t cmpl, void *priv);
 
+typedef void (*ocf_mngt_cache_failover_detach_end_t)(void *priv, int error);
+
+void ocf_mngt_cache_failover_detach(ocf_cache_t cache,
+		ocf_mngt_cache_failover_detach_end_t cmpl, void *priv);
 /**
  * @brief Completion callback of cache activate operation
  *

@@ -161,6 +161,9 @@ bool ocf_cache_is_running(ocf_cache_t cache);
  */
 bool ocf_cache_is_passive(ocf_cache_t cache);
 
+/* TODO: comment */
+bool ocf_cache_is_failover(ocf_cache_t cache);
+
 /**
  * @brief Get cache mode of given cache object
  *
