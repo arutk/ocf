@@ -74,59 +74,26 @@ class VolumeIoPriv(Structure):
     _fields_ = [("_data", c_void_p), ("_offset", c_uint64)]
 
 def get_volume_classes():
-    return RamVolume.get_volume_classes()
+    return Volume.get_volume_classes()
+
 
 VOLUME_POISON = 0x13
 
-class RamVolume():
+class Volume:
     _instances_ = weakref.WeakValueDictionary()
     _uuid_ = weakref.WeakValueDictionary()
     _volume_classes = []
 
     def __init_subclass__(cls, **kwargs):
-        RamVolume._volume_classes += [cls]
+        Volume._volume_classes += [cls]
 
     @staticmethod
     def get_volume_classes():
-        return RamVolume._volume_classes + [RamVolume]
-
-    props = None
-
-    def __init__(self, size: S, uuid=None):
-        super().__init__()
-        self.size = size
-        if uuid:
-            if uuid in type(self)._uuid_:
-                raise Exception(
-                    "RamVolume with uuid {} already created".format(uuid)
-                )
-            self.uuid = uuid
-        else:
-            self.uuid = str(id(self))
-
-        type(self)._uuid_[self.uuid] = self
-
-        self.data = create_string_buffer(int(self.size))
-        memset(self.data, VOLUME_POISON, self.size)
-        self.data_ptr = cast(self.data, c_void_p).value
-
-        self.reset_stats()
-        self.opened = False
-
-    def get_copy(self):
-        new_volume = RamVolume(self.size)
-        memmove(new_volume.data, self.data, self.size)
-        return new_volume
+        return Volume._volume_classes
 
     @classmethod
-    def get_props(cls):
-        if not cls.props:
-            cls.props = VolumeProperties(
-                _name=str(cls.__name__).encode("ascii"),
-                _io_priv_size=sizeof(VolumeIoPriv),
-                _volume_priv_size=0,
-                _caps=VolumeCaps(_atomic_writes=0),
-                _ops=VolumeOps(
+    def get_ops(cls):
+        cls.ops = VolumeOps(
                     _submit_io=cls._submit_io,
                     _submit_flush=cls._submit_flush,
                     _submit_metadata=cls._submit_metadata,
@@ -136,14 +103,21 @@ class RamVolume():
                     _close=cls._close,
                     _get_max_io_size=cls._get_max_io_size,
                     _get_length=cls._get_length,
-                ),
-                _io_ops=IoOps(
-                    _set_data=cls._io_set_data, _get_data=cls._io_get_data
-                ),
-                _deinit=0,
-            )
+                )
+        return cls.ops
 
-        return cls.props
+    @classmethod
+    def get_io_ops(cls):
+        return IoOps(
+                    _set_data=cls._io_set_data, _get_data=cls._io_get_data
+                )
+
+    def get_copy(self):
+        pass
+
+    @classmethod
+    def get_props(cls):    
+        pass
 
     @classmethod
     def get_instance(cls, ref):
@@ -161,7 +135,7 @@ class RamVolume():
     @VolumeOps.SUBMIT_IO
     def _submit_io(io):
         io_structure = cast(io, POINTER(Io))
-        volume = RamVolume.get_instance(
+        volume = Volume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -171,7 +145,7 @@ class RamVolume():
     @VolumeOps.SUBMIT_FLUSH
     def _submit_flush(flush):
         io_structure = cast(flush, POINTER(Io))
-        volume = RamVolume.get_instance(
+        volume = Volume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -186,7 +160,7 @@ class RamVolume():
     @VolumeOps.SUBMIT_DISCARD
     def _submit_discard(discard):
         io_structure = cast(discard, POINTER(Io))
-        volume = RamVolume.get_instance(
+        volume = Volume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -205,35 +179,35 @@ class RamVolume():
         )
         uuid = str(uuid_ptr.contents._data, encoding="ascii")
         try:
-            volume = RamVolume.get_by_uuid(uuid)
+            volume = Volume.get_by_uuid(uuid)
         except:  # noqa E722 TODO:Investigate whether this really should be so broad
             print("Tried to access unallocated volume {}".format(uuid))
-            print("{}".format(RamVolume._uuid_))
+            print("{}".format(Volume._uuid_))
             return -1
 
         if volume.opened:
             return OcfErrorCode.OCF_ERR_NOT_OPEN_EXC
 
-        RamVolume._instances_[ref] = volume
+        Volume._instances_[ref] = volume
 
         return volume.open()
 
     @staticmethod
     @VolumeOps.CLOSE
     def _close(ref):
-        volume = RamVolume.get_instance(ref)
+        volume = Volume.get_instance(ref)
         volume.close()
         volume.opened = False
 
     @staticmethod
     @VolumeOps.GET_MAX_IO_SIZE
     def _get_max_io_size(ref):
-        return RamVolume.get_instance(ref).get_max_io_size()
+        return Volume.get_instance(ref).get_max_io_size()
 
     @staticmethod
     @VolumeOps.GET_LENGTH
     def _get_length(ref):
-        return RamVolume.get_instance(ref).get_length()
+        return Volume.get_instance(ref).get_length()
 
     @staticmethod
     @IoOps.SET_DATA
@@ -255,12 +229,82 @@ class RamVolume():
         )
         return io_priv.contents._data
 
+    def __init__(self, uuid):
+        if uuid:
+            if uuid in type(self)._uuid_:
+                raise Exception(
+                    "Volume with uuid {} already created".format(uuid)
+                )
+            self.uuid = uuid
+        else:
+            self.uuid = str(id(self))
+
+        type(self)._uuid_[self.uuid] = self
+
     def open(self):
         self.opened = True
         return 0
 
     def close(self):
+        self.opened = False
+
+    def get_length(self):
         pass
+
+    def get_max_io_size(self):
+        pass
+
+    def submit_flush(self, flush):
+        pass
+
+    def submit_discard(self, discard):
+        pass
+
+    def get_stats(self):
+        pass
+
+    def reset_stats(self):
+        pass
+
+    def submit_io(self, io):
+        pass
+
+    def dump(self, offset=0, size=0, ignore=VOLUME_POISON, **kwargs):
+        pass
+
+    def md5(self):
+        pass
+
+class RamVolume(Volume):
+    props = None
+
+    def __init__(self, size: S, uuid=None):
+        super().__init__(uuid)
+        self.size = size
+        self.data = create_string_buffer(int(self.size))
+        memset(self.data, VOLUME_POISON, self.size)
+        self.data_ptr = cast(self.data, c_void_p).value
+
+        self.reset_stats()
+        self.opened = False
+
+    def get_copy(self):
+        new_volume = RamVolume(self.size)
+        memmove(new_volume.data, self.data, self.size)
+        return new_volume
+
+    @classmethod
+    def get_props(cls):
+        cls.props = VolumeProperties(
+            _name=str(cls.__name__).encode("ascii"),
+            _io_priv_size=sizeof(VolumeIoPriv),
+            _volume_priv_size=0,
+            _caps=VolumeCaps(_atomic_writes=0),
+            _ops=cls.get_ops(),
+            _io_ops=cls.get_io_ops(),
+            _deinit=0,
+        )
+        return cls.props
 
     def get_length(self):
         return self.size
@@ -326,7 +370,6 @@ class RamVolume():
         m = md5()
         m.update(string_at(self.data_ptr, self.size))
         return m.hexdigest()
-
 
 class ErrorDevice(RamVolume):
     def __init__(self, size, error_sectors: set = None, uuid=None):
