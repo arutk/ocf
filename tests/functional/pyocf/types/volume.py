@@ -74,21 +74,21 @@ class VolumeIoPriv(Structure):
     _fields_ = [("_data", c_void_p), ("_offset", c_uint64)]
 
 def get_volume_classes():
-    return Volume.get_volume_classes()
+    return RamVolume.get_volume_classes()
 
 VOLUME_POISON = 0x13
 
-class Volume():
+class RamVolume():
     _instances_ = weakref.WeakValueDictionary()
     _uuid_ = weakref.WeakValueDictionary()
     _volume_classes = []
 
     def __init_subclass__(cls, **kwargs):
-        Volume._volume_classes += [cls]
+        RamVolume._volume_classes += [cls]
 
     @staticmethod
     def get_volume_classes():
-        return Volume._volume_classes + [Volume]
+        return RamVolume._volume_classes + [RamVolume]
 
     props = None
 
@@ -98,7 +98,7 @@ class Volume():
         if uuid:
             if uuid in type(self)._uuid_:
                 raise Exception(
-                    "Volume with uuid {} already created".format(uuid)
+                    "RamVolume with uuid {} already created".format(uuid)
                 )
             self.uuid = uuid
         else:
@@ -114,7 +114,7 @@ class Volume():
         self.opened = False
 
     def get_copy(self):
-        new_volume = Volume(self.size)
+        new_volume = RamVolume(self.size)
         memmove(new_volume.data, self.data, self.size)
         return new_volume
 
@@ -161,7 +161,7 @@ class Volume():
     @VolumeOps.SUBMIT_IO
     def _submit_io(io):
         io_structure = cast(io, POINTER(Io))
-        volume = Volume.get_instance(
+        volume = RamVolume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -171,7 +171,7 @@ class Volume():
     @VolumeOps.SUBMIT_FLUSH
     def _submit_flush(flush):
         io_structure = cast(flush, POINTER(Io))
-        volume = Volume.get_instance(
+        volume = RamVolume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -186,7 +186,7 @@ class Volume():
     @VolumeOps.SUBMIT_DISCARD
     def _submit_discard(discard):
         io_structure = cast(discard, POINTER(Io))
-        volume = Volume.get_instance(
+        volume = RamVolume.get_instance(
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
@@ -205,35 +205,35 @@ class Volume():
         )
         uuid = str(uuid_ptr.contents._data, encoding="ascii")
         try:
-            volume = Volume.get_by_uuid(uuid)
+            volume = RamVolume.get_by_uuid(uuid)
         except:  # noqa E722 TODO:Investigate whether this really should be so broad
             print("Tried to access unallocated volume {}".format(uuid))
-            print("{}".format(Volume._uuid_))
+            print("{}".format(RamVolume._uuid_))
             return -1
 
         if volume.opened:
             return OcfErrorCode.OCF_ERR_NOT_OPEN_EXC
 
-        Volume._instances_[ref] = volume
+        RamVolume._instances_[ref] = volume
 
         return volume.open()
 
     @staticmethod
     @VolumeOps.CLOSE
     def _close(ref):
-        volume = Volume.get_instance(ref)
+        volume = RamVolume.get_instance(ref)
         volume.close()
         volume.opened = False
 
     @staticmethod
     @VolumeOps.GET_MAX_IO_SIZE
     def _get_max_io_size(ref):
-        return Volume.get_instance(ref).get_max_io_size()
+        return RamVolume.get_instance(ref).get_max_io_size()
 
     @staticmethod
     @VolumeOps.GET_LENGTH
     def _get_length(ref):
-        return Volume.get_instance(ref).get_length()
+        return RamVolume.get_instance(ref).get_length()
 
     @staticmethod
     @IoOps.SET_DATA
@@ -328,7 +328,7 @@ class Volume():
         return m.hexdigest()
 
 
-class ErrorDevice(Volume):
+class ErrorDevice(RamVolume):
     def __init__(self, size, error_sectors: set = None, uuid=None):
         super().__init__(size, uuid)
         self.error_sectors = error_sectors or set()
@@ -348,7 +348,7 @@ class ErrorDevice(Volume):
         self.stats["errors"] = {IoDir.WRITE: 0, IoDir.READ: 0}
 
 
-class TraceDevice(Volume):
+class TraceDevice(RamVolume):
     def __init__(self, size, trace_fcn=None, uuid=None):
         super().__init__(size, uuid)
         self.trace_fcn = trace_fcn
