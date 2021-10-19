@@ -1,6 +1,7 @@
 __pycache__
 pyocf/__pycache__
 pyocf/libocf.so
+./config/random.cfg
 *.o
 pyocf/ocf/*
 *.pyc
