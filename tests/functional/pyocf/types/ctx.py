@@ -12,8 +12,6 @@ from .cleaner import CleanerOps, Cleaner
 from .shared import OcfError
 from ..ocf import OcfLib
 from .queue import Queue
-from .volume import RamVolume
-
 
 class OcfCtxOps(Structure):
     _fields_ = [
@@ -85,7 +83,7 @@ class OcfCtx:
             byref(self.volume_types[self.volume_types_count].get_props()),
         )
         if result != 0:
-            raise OcfError("RamVolume type registration failed", result)
+            raise OcfError("Volume type registration failed", result)
 
         self.volume_types_count += 1
 
@@ -119,7 +117,7 @@ class OcfCtx:
         # self.data = None
         # self.cleaner = None
         # Queue._instances_ = {}
-        # RamVolume._instances_ = {}
+        # Volume._instances_ = {}
         # Data._instances_ = {}
         # Logger._instances_ = {}
 
