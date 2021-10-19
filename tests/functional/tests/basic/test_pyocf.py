@@ -8,7 +8,7 @@ from ctypes import c_int
 
 from pyocf.types.cache import Cache
 from pyocf.types.core import Core
-from pyocf.types.volume import Volume, ErrorDevice
+from pyocf.types.volume import RamVolume, ErrorDevice
 from pyocf.types.data import Data
 from pyocf.types.io import IoDir
 from pyocf.utils import Size as S
@@ -20,8 +20,8 @@ def test_ctx_fixture(pyocf_ctx):
 
 
 def test_simple_wt_write(pyocf_ctx):
-    cache_device = Volume(S.from_MiB(50))
-    core_device = Volume(S.from_MiB(50))
+    cache_device = RamVolume(S.from_MiB(50))
+    core_device = RamVolume(S.from_MiB(50))
 
     cache = Cache.start_on_device(cache_device)
     core = Core.using_device(core_device)
@@ -59,14 +59,14 @@ def test_start_corrupted_metadata_lba(pyocf_ctx):
 
 
 def test_load_cache_no_preexisting_data(pyocf_ctx):
-    cache_device = Volume(S.from_MiB(50))
+    cache_device = RamVolume(S.from_MiB(50))
 
     with pytest.raises(OcfError, match="OCF_ERR_NO_METADATA"):
         cache = Cache.load_from_device(cache_device)
 
 
 def test_load_cache(pyocf_ctx):
-    cache_device = Volume(S.from_MiB(50))
+    cache_device = RamVolume(S.from_MiB(50))
 
     cache = Cache.start_on_device(cache_device)
     cache.stop()
@@ -75,7 +75,7 @@ def test_load_cache(pyocf_ctx):
 
 
 def test_load_cache_recovery(pyocf_ctx):
-    cache_device = Volume(S.from_MiB(50))
+    cache_device = RamVolume(S.from_MiB(50))
 
     cache = Cache.start_on_device(cache_device)
 
