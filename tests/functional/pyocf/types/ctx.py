@@ -78,6 +78,7 @@ class OcfCtx:
         self.volume_types[self.volume_types_count] = volume_type
         volume_type.type_id = self.volume_types_count
 
+        print(f"ctx.py registering volume {volume_type.__name__}")
         result = self.lib.ocf_ctx_register_volume_type(
             self.ctx_handle,
             self.volume_types_count,
