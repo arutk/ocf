@@ -73,11 +73,22 @@ class VolumeProperties(Structure):
 class VolumeIoPriv(Structure):
     _fields_ = [("_data", c_void_p), ("_offset", c_uint64)]
 
+def get_volume_classes():
+    return Volume.get_volume_classes()
+
 VOLUME_POISON = 0x13
 
 class Volume():
     _instances_ = weakref.WeakValueDictionary()
     _uuid_ = weakref.WeakValueDictionary()
+    _volume_classes = []
+
+    def __init_subclass__(cls, **kwargs):
+        Volume._volume_classes += [cls]
+
+    @staticmethod
+    def get_volume_classes():
+        return Volume._volume_classes + [Volume]
 
     props = None
 
