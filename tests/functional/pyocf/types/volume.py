@@ -112,11 +112,20 @@ class Volume:
                     _set_data=cls._io_set_data, _get_data=cls._io_get_data
                 )
 
-    def get_copy(self):
-        pass
-
     @classmethod
-    def get_props(cls):    
+    def get_props(cls):
+        cls.props = VolumeProperties(
+            _name=str(cls.__name__).encode("ascii"),
+            _io_priv_size=sizeof(VolumeIoPriv),
+            _volume_priv_size=0,
+            _caps=VolumeCaps(_atomic_writes=0),
+            _ops=cls.get_ops(),
+            _io_ops=cls.get_io_ops(),
+            _deinit=0,
+        )
+        return cls.props
+
+    def get_copy(self):
         pass
 
     @classmethod
@@ -292,19 +301,6 @@ class RamVolume(Volume):
         new_volume = RamVolume(self.size)
         memmove(new_volume.data, self.data, self.size)
         return new_volume
-
-    @classmethod
-    def get_props(cls):
-        cls.props = VolumeProperties(
-            _name=str(cls.__name__).encode("ascii"),
-            _io_priv_size=sizeof(VolumeIoPriv),
-            _volume_priv_size=0,
-            _caps=VolumeCaps(_atomic_writes=0),
-            _ops=cls.get_ops(),
-            _io_ops=cls.get_io_ops(),
-            _deinit=0,
-        )
-        return cls.props
 
     def get_length(self):
         return self.size
