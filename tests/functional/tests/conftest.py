@@ -46,3 +46,22 @@ def pyocf_ctx_log_buffer():
     yield logger
     c.exit()
     gc.collect()
+
+@pytest.fixture()
+def pyocf_2_ctx():
+    c1 = OcfCtx.with_defaults(DefaultLogger(LogLevel.WARN, "Ctx1"))
+    c2 = OcfCtx.with_defaults(DefaultLogger(LogLevel.WARN, "Ctx2"))
+    c1.register_volume_type(RamVolume)
+    c1.register_volume_type(ErrorDevice)
+    c1.register_volume_type(CacheVolume)
+    c1.register_volume_type(CoreVolume)
+    c1.register_volume_type(ReplicatedVolume)
+    c2.register_volume_type(RamVolume)
+    c2.register_volume_type(ErrorDevice)
+    c2.register_volume_type(CacheVolume)
+    c2.register_volume_type(CoreVolume)
+    c2.register_volume_type(ReplicatedVolume)
+    yield [c1, c2]
+    c1.exit()
+    c2.exit()
+    gc.collect()
