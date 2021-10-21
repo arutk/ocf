@@ -13,6 +13,8 @@ from .shared import OcfError
 from ..ocf import OcfLib
 from .queue import Queue
 
+import pdb
+
 class OcfCtxOps(Structure):
     _fields_ = [
         ("data", DataOps),
@@ -34,9 +36,8 @@ class OcfCtx:
         self.cleaner = cleaner
         self.ctx_handle = c_void_p()
         self.lib = lib
-        self.volume_types_count = 1
-        self.volume_types = {}
         self.caches = []
+        self.registered_volume_types = []
 
         self.cfg = OcfCtxCfg(
             name=name,
@@ -72,35 +73,21 @@ class OcfCtx:
 
         return cls.default()
 
-    def register_volume_type(self, volume_type):
-        self.volume_types[self.volume_types_count] = volume_type
-        volume_type.type_id = self.volume_types_count
-
-        print(f"ctx.py registering volume {volume_type.__name__}")
+    def register_volume_type(self, vol_id, props):
         result = self.lib.ocf_ctx_register_volume_type(
-            self.ctx_handle,
-            self.volume_types_count,
-            byref(self.volume_types[self.volume_types_count].get_props()),
-        )
+            self.ctx_handle, vol_id, props)
         if result != 0:
             raise OcfError("Volume type registration failed", result)
 
-        self.volume_types_count += 1
-
-    def unregister_volume_type(self, vol_type):
-        if not vol_type.type_id:
-            raise Exception("Already unregistered")
-
+    def unregister_volume_type(self, type_id):
         self.lib.ocf_ctx_unregister_volume_type(
-            self.ctx_handle, vol_type.type_id
+            self.ctx_handle, type_id
         )
-
-        del self.volume_types[vol_type.type_id]
+        self.registered_volume_types += [type_id]
 
     def cleanup_volume_types(self):
-        for k, vol_type in list(self.volume_types.items()):
-            if vol_type:
-                self.unregister_volume_type(vol_type)
+        for vol_type in self.registered_volume_types:
+            self.unregister_volume_type(vol_type)
 
     def stop_caches(self):
         for cache in self.caches[:]:
