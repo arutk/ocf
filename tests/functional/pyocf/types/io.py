@@ -98,6 +98,32 @@ class Io(Structure):
     def submit(self):
         return OcfLib.getInstance().ocf_core_submit_io_wrapper(byref(self))
 
+    def submit_sync(self):
+        finished = False
+        error = 0
+        cond = Condition()
+        @CFUNCTYPE(c_void_p, c_int)
+        def cb(err):
+            error = err
+            with cond:
+                finished = True
+                cond.notify_all()
+
+        io.callback = cb 
+
+        io.submit()
+
+        with cond:
+            cond.wait_for(lambda: finished)
+
+        return error
+
+    def submit_flush(self):
+        return OcfLib.getInstance().ocf_core_submit_flush_wrapper(byref(self))
+
+    def submit_discard(self):
+        return OcfLib.getInstance().ocf_core_submit_discard_wrapper(byref(self))
+
     def set_data(self, data: Data, offset: int = 0):
         self.data = data
         OcfLib.getInstance().ocf_io_set_data(byref(self), data, offset)
