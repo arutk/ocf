@@ -11,6 +11,8 @@ import gc
 sys.path.append(os.path.join(os.path.dirname(__file__), os.path.pardir))
 from pyocf.types.logger import LogLevel, DefaultLogger, BufferLogger
 from pyocf.types.volume import get_volume_classes
+from pyocf.types.volume_ocf import OCFVolume
+from pyocf.types.volume_replicated import ReplicatedVolume
 from pyocf.types.ctx import OcfCtx
 
 
