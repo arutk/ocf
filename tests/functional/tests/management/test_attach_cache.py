@@ -32,6 +32,7 @@ from pyocf.utils import Size
 
 logger = logging.getLogger(__name__)
 
+import pdb
 
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", [CacheMode.WB, CacheMode.WT, CacheMode.WO])

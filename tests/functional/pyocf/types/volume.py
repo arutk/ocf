@@ -4,6 +4,7 @@
 #
 
 from ctypes import (
+    byref,
     POINTER,
     c_void_p,
     c_uint32,
@@ -28,6 +29,7 @@ from .shared import OcfErrorCode, Uuid
 from ..ocf import OcfLib
 from ..utils import print_buffer, Size as S
 from .data import Data
+from .ctx import OcfCtx
 
 
 class VolumeCaps(Structure):
@@ -82,14 +84,34 @@ VOLUME_POISON = 0x13
 class Volume:
     _instances_ = weakref.WeakValueDictionary()
     _uuid_ = weakref.WeakValueDictionary()
-    _volume_classes = []
+    volume_classes = {}
+    volume_type_ids = {}
 
     def __init_subclass__(cls, **kwargs):
-        Volume._volume_classes += [cls]
+        type_id = len(Volume.volume_classes)
+        Volume.volume_classes[type_id] = [cls]
+        Volume.volume_type_ids[cls] = 4 + type_id
 
     @staticmethod
     def get_volume_classes():
-        return Volume._volume_classes
+        return Volume.volume_type_ids.keys()
+
+    @classmethod
+    def register_volume_type(cls, ctx):
+        if not ctx:
+            ctx = OcfCtx.get_default()
+        type_id = Volume.volume_type_ids[cls]
+        props = byref(cls.get_props())
+        print(f"registering volume {cls.__name__} in context {ctx}")
+        ctx.register_volume_type(type_id, props)
+
+    @classmethod
+    def unregister_volume_type(cls, ctx):
+        if not ctx:
+            ctx = OcfCtx.get_default()
+        type_id = Volume.volume_type_ids[cls]
+        props = byref(cls.get_props())
+        ctx.unregister_volume_type(type_id)
 
     @classmethod
     def get_ops(cls):
@@ -238,7 +260,7 @@ class Volume:
         )
         return io_priv.contents._data
 
-    def __init__(self, uuid):
+    def __init__(self, uuid = None):
         if uuid:
             if uuid in type(self)._uuid_:
                 raise Exception(
@@ -249,6 +271,9 @@ class Volume:
             self.uuid = str(id(self))
 
         type(self)._uuid_[self.uuid] = self
+
+        self.type_id = Volume.volume_type_ids[self.__class__]
+        self.opened = False
 
     def open(self):
         self.opened = True

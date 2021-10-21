@@ -5,7 +5,7 @@ from pyocf.types.cache import (
     CleaningPolicy,
 )
 from pyocf.types.volume import RamVolume
-from pyocf.types.volume_ocf import OCFVolume
+from pyocf.types.volume_ocf import OcfVolume
 from pyocf.types.volume_replicated import ReplicatedVolume
 from pyocf.types.shared import (
     OcfError,
