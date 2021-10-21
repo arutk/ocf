@@ -34,3 +34,13 @@ void ocf_core_submit_io_wrapper(struct ocf_io *io)
 	ocf_core_submit_io(io);
 }
 
+
+void ocf_core_submit_flush_wrapper(struct ocf_io *io)
+{
+	ocf_core_submit_flush(io);
+}
+
+void ocf_core_submit_discard_wrapper(struct ocf_io *io)
+{
+	ocf_core_submit_discard(io);
+}
