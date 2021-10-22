@@ -86,6 +86,8 @@ class Volume:
     _uuid_ = weakref.WeakValueDictionary()
     volume_classes = {}
     volume_type_ids = {}
+    props = {}
+    ops = {}
 
     def __init_subclass__(cls, **kwargs):
         type_id = len(Volume.volume_classes)
@@ -115,18 +117,19 @@ class Volume:
 
     @classmethod
     def get_ops(cls):
-        cls.ops = VolumeOps(
-                    _submit_io=cls._submit_io,
-                    _submit_flush=cls._submit_flush,
-                    _submit_metadata=cls._submit_metadata,
-                    _submit_discard=cls._submit_discard,
-                    _submit_write_zeroes=cls._submit_write_zeroes,
-                    _open=cls._open,
-                    _close=cls._close,
-                    _get_max_io_size=cls._get_max_io_size,
-                    _get_length=cls._get_length,
-                )
-        return cls.ops
+        if not cls in Volume.ops.keys():
+            Volume.ops[cls] = VolumeOps(
+                        _submit_io=cls._submit_io,
+                        _submit_flush=cls._submit_flush,
+                        _submit_metadata=cls._submit_metadata,
+                        _submit_discard=cls._submit_discard,
+                        _submit_write_zeroes=cls._submit_write_zeroes,
+                        _open=cls._open,
+                        _close=cls._close,
+                        _get_max_io_size=cls._get_max_io_size,
+                        _get_length=cls._get_length,
+                    )
+        return Volume.ops[cls]
 
     @classmethod
     def get_io_ops(cls):
@@ -136,16 +139,17 @@ class Volume:
 
     @classmethod
     def get_props(cls):
-        cls.props = VolumeProperties(
-            _name=str(cls.__name__).encode("ascii"),
-            _io_priv_size=sizeof(VolumeIoPriv),
-            _volume_priv_size=0,
-            _caps=VolumeCaps(_atomic_writes=0),
-            _ops=cls.get_ops(),
-            _io_ops=cls.get_io_ops(),
-            _deinit=0,
-        )
-        return cls.props
+        if cls not in Volume.props.keys():
+            Volume.props[cls] = VolumeProperties(
+                _name=str(cls.__name__).encode("ascii"),
+                _io_priv_size=sizeof(VolumeIoPriv),
+                _volume_priv_size=0,
+                _caps=VolumeCaps(_atomic_writes=0),
+                _ops=cls.get_ops(),
+                _io_ops=cls.get_io_ops(),
+                _deinit=0,
+            )
+        return Volume.props[cls]
 
     def get_copy(self):
         pass
