@@ -606,7 +606,7 @@ class Cache:
         return {
             "conf": {
                 "attached": cache_info.attached,
-                "volume_type": self.device.volume_type,
+                "volume_type": self.device.type_id,
                 "size": CacheLines(cache_info.size, line_size),
                 "inactive": {
                     "occupancy": CacheLines(

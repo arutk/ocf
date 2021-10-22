@@ -45,8 +45,8 @@ def pyocf_2_ctx():
     for vol in get_volume_classes():
         print("reg vol 1 c 1")
         vol.register_volume_type(c1)
-        #print("reg vol 1 c 2")
-        #vol.register_volume_type(c2)
+        print("reg vol 1 c 2")
+        vol.register_volume_type(c2)
     yield [c1, c2]
     c1.exit()
     c2.exit()

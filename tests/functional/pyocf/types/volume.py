@@ -260,7 +260,7 @@ class Volume:
         )
         return io_priv.contents._data
 
-    def __init__(self, uuid):
+    def __init__(self, uuid = None):
         if uuid:
             if uuid in type(self)._uuid_:
                 raise Exception(
@@ -273,6 +273,7 @@ class Volume:
         type(self)._uuid_[self.uuid] = self
 
         self.type_id = Volume.volume_type_ids[self.__class__]
+        self.opened = False
 
     def open(self):
         self.opened = True
