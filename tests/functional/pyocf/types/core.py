@@ -110,6 +110,10 @@ class Core:
 
         return Io.from_pointer(io)
 
+    def get_volume(self):
+        assert self.device == lib.ocf_core_get_volume(self.handle)
+        return lib.ocf_core_get_volume(self.handle)
+
     def new_core_io(
         self, queue: Queue, addr: int, length: int, direction: IoDir,
         io_class: int, flags: int

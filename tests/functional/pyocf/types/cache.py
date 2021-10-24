@@ -35,10 +35,10 @@ from ..utils import Size, struct_to_dict
 from .core import Core
 from .queue import Queue
 from .stats.cache import CacheInfo
+from .io import IoDir
 from .ioclass import IoClassesInfo, IoClassInfo
 from .stats.shared import UsageStats, RequestsStats, BlocksStats, ErrorsStats
 from .ctx import OcfCtx
-
 
 class Backfill(Structure):
     _fields_ = [("_max_queue_size", c_uint32), ("_queue_unblock_size", c_uint32)]
@@ -597,6 +597,20 @@ class Cache:
 
         self.cores.remove(core)
 
+    def get_volume(self):
+        return lib.ocf_cache_get_volume(self.handle)
+
+    def new_io(
+        self, queue: Queue, addr: int, length: int, direction: IoDir,
+        io_class: int, flags: int
+    ):
+        lib = OcfLib.getInstance()
+        volume = lib.ocf_cache_get_volume(self.handle)
+        io = lib.ocf_volume_new_io(
+            volume, queue.handle, addr, length, direction, io_class, flags)
+        return Io.from_pointer(io)
+
+
     def get_stats(self):
         cache_info = CacheInfo()
         usage = UsageStats()
@@ -775,3 +789,14 @@ lib.ocf_mngt_add_partition_to_cache.argtypes = [
 ]
 lib.ocf_mngt_cache_io_classes_configure.restype = c_int
 lib.ocf_mngt_cache_io_classes_configure.argtypes = [c_void_p, c_void_p]
+lib.ocf_volume_new_io.argtypes = [
+    c_void_p,
+    c_void_p,
+    c_uint64,
+    c_uint32,
+    c_uint32,
+    c_uint32,
+    c_uint64,
+]
+lib.ocf_volume_new_io.restype = c_void_p
+
