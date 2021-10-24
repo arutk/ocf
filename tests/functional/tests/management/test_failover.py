@@ -6,7 +6,7 @@ from pyocf.types.cache import (
 )
 from pyocf.types.core import Core
 from pyocf.types.volume import RamVolume
-from pyocf.types.volume_ocf import CoreVolume
+from pyocf.types.volume_cache import CacheVolume
 from pyocf.types.volume_replicated import ReplicatedVolume
 from pyocf.types.shared import (
     OcfError,
@@ -17,11 +17,15 @@ from pyocf.types.shared import (
 )
 from pyocf.utils import Size
 
+import pdb
+
 def test_setup_failover(pyocf_2_ctx):
     ctx1 = pyocf_2_ctx[0]
     ctx2 = pyocf_2_ctx[1]
     mode = CacheMode.WO
     cls = CacheLineSize.LINE_4KiB
+
+    pdb.set_trace()
 
     prim_cache_backend_vol = RamVolume(Size.from_MiB(35))
     prim_core_backend_vol = RamVolume(Size.from_MiB(100))
@@ -33,13 +37,13 @@ def test_setup_failover(pyocf_2_ctx):
     core2 = Core.using_device(sec_core_backend_vol)
     cache2.add_core(core2)
 
-    # volume replicating core1 ramdisk writes to cache2 exported object
-    cache2_exp_obj_vol = CoreVolume(core2)
-    cache1_core_vol = ReplicatedVolume(prim_core_backend_vol, cache2_exp_obj_vol)
+    # volume replicating cache1 ramdisk writes to cache2 cache exported object
+    cache2_exp_obj_vol = CacheVolume(cache2)
+    cache1_cache_vol = ReplicatedVolume(prim_cache_backend_vol, cache2_exp_obj_vol)
 
     # active cache 
-    cache1 = Cache.start_on_device(prim_cache_backend_vol, ctx1, cache_mode=mode, cache_line_size=cls)
-    core1 = Core.using_device(cache1_core_vol)
+    cache1 = Cache.start_on_device(cache1_cache_vol, ctx1, cache_mode=mode, cache_line_size=cls)
+    core1 = Core.using_device(prim_core_backend_vol)
     cache1.add_core(core1)
 
 

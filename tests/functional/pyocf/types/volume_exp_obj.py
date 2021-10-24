@@ -1,5 +1,6 @@
 from ctypes import c_int, c_void_p, CFUNCTYPE, byref
 
+from ..ocf import OcfLib
 from .volume import Volume, VOLUME_POISON
 from .core import Core
 from pyocf.utils import Size
@@ -11,7 +12,7 @@ class ExpObjVolume(Volume):
     def __init__(self, cc, uuid = None):
         super().__init__(uuid)
         self.cc = cc
-        self.pvolume = cc.get_volume()
+        self.volume = cc.get_volume()
 
     def __alloc_io(self, addr, _bytes, _dir_, _class, _flags):
         queue = self.core.cache.get_default_queue(),  # TODO multiple queues?

@@ -598,14 +598,14 @@ class Cache:
         self.cores.remove(core)
 
     def get_volume(self):
-        return lib.ocf_cache_get_volume(self.handle)
+        return lib.ocf_cache_get_front_volume(self.cache_handle)
 
     def new_io(
         self, queue: Queue, addr: int, length: int, direction: IoDir,
         io_class: int, flags: int
     ):
         lib = OcfLib.getInstance()
-        volume = lib.ocf_cache_get_volume(self.handle)
+        volume = lib.ocf_cache_get_front_volume(self.cache_handle)
         io = lib.ocf_volume_new_io(
             volume, queue.handle, addr, length, direction, io_class, flags)
         return Io.from_pointer(io)
@@ -746,6 +746,8 @@ lib.ocf_mngt_cache_remove_core.argtypes = [c_void_p, c_void_p, c_void_p]
 lib.ocf_mngt_cache_add_core.argtypes = [c_void_p, c_void_p, c_void_p, c_void_p]
 lib.ocf_cache_get_name.argtypes = [c_void_p]
 lib.ocf_cache_get_name.restype = c_char_p
+lib.ocf_cache_get_front_volume.argtypes = [c_void_p]
+lib.ocf_cache_get_front_volume.restype = c_void_p
 lib.ocf_mngt_cache_cleaning_set_policy.argtypes = [
     c_void_p,
     c_uint32,
