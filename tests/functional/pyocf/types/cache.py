@@ -35,7 +35,7 @@ from ..utils import Size, struct_to_dict
 from .core import Core
 from .queue import Queue
 from .stats.cache import CacheInfo
-from .io import IoDir
+from .io import IoDir, Io
 from .ioclass import IoClassesInfo, IoClassInfo
 from .stats.shared import UsageStats, RequestsStats, BlocksStats, ErrorsStats
 from .ctx import OcfCtx
@@ -453,23 +453,37 @@ class Cache:
             _discard_on_start=False,
         )
 
-    def attach_device(
-        self, device, force=False, perform_test=False, cache_line_size=None
+    def _attach_device(
+        self, device, standby = False, force=False, perform_test=False, cache_line_size=None
     ):
         self.configure_device(device, force, perform_test, cache_line_size)
         self.write_lock()
 
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
 
-        self.owner.lib.ocf_mngt_cache_attach(
-            self.cache_handle, byref(self.dev_cfg), c, None
-        )
+        if not standby:
+            self.owner.lib.ocf_mngt_cache_attach(
+                self.cache_handle, byref(self.dev_cfg), c, None
+            )
+        else:
+            self.owner.lib.ocf_mngt_cache_standby(
+                self.cache_handle, byref(self.dev_cfg), c, None
+            )
+
 
         c.wait()
         self.write_unlock()
 
         if c.results["error"]:
-            raise OcfError("Attaching cache device failed", c.results["error"])
+            raise OcfError(f"{'Starting standby' if standby else 'Attaching'} : cache device failed", c.results["error"])
+
+    def attach_device(
+        self, device, force=False, perform_test=False, cache_line_size=None
+    ):
+        self._attach_device(device, False, force, perform_test, cache_line_size)
+
+    def standby(self, device):
+        self._attach_device(device, True, False, False)
 
     def detach_device(self):
         self.write_lock()
