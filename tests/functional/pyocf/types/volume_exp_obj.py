@@ -1,4 +1,4 @@
-from ctypes import c_int, c_void_p, CFUNCTYPE, byref
+from ctypes import c_int, c_void_p, CFUNCTYPE, byref, c_uint32, c_uint64
 
 from ..ocf import OcfLib
 from .volume import Volume, VOLUME_POISON
@@ -20,8 +20,8 @@ class ExpObjVolume(Volume):
         return exp_obj_io
 
     def _alloc_io(self, io):
-        exp_obj_io = self.__alloc_io(io._addr, io._bytes,
-                io._dir, io._class, io._flags)
+        exp_obj_io = self.__alloc_io(io.contents_addr, io.contents._bytes,
+                io.contents._dir, io.contents._class, io.contents._flags)
 
         exp_obj_io.set_data(io.data)
 
@@ -81,5 +81,9 @@ class ExpObjVolume(Volume):
         pass
 
 
-
+lib = OcfLib.getInstance()
+lib.ocf_volume_get_max_io_size.argtypes = [c_void_p]
+lib.ocf_volume_get_max_io_size.restype = c_uint32
+lib.ocf_volume_get_length.argtypes = [c_void_p]
+lib.ocf_volume_get_length.restype = c_uint64
 

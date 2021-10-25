@@ -1,5 +1,6 @@
 from threading import Lock
 from .volume import Volume, VOLUME_POISON
+from .io import Io
 
 class ReplicatedVolume(Volume):
     def __init__(self, primary: Volume, secondary: Volume, uuid = None):
@@ -12,33 +13,35 @@ class ReplicatedVolume(Volume):
         if secondary.get_length() < primary.get_length():
             raise Exception("secondary volume size too small")
 
+   
     def open(self):
-        self.primary.open()
-        self.secondary.open()
+        ret = self.primary.open()
+        if ret:
+            return ret
+        ret = self.secondary.open()
+        if ret:
+            self.primary.close()
+        return ret
 
     def close(self):
         self.primary.close()
         self.secondary.close()
 
     def get_length(self):
-        return self.primary.length()
+        return self.primary.get_length()
 
     def get_max_io_size(self):
         return self.primary.get_max_io_size()
 
-    def _prepare_io(self, io):
+    def _prepare_io(self, cio):
+        io = Io.get_instance(cio)
         original_cb = io.callback
         lock = Lock()
         error = 0
         io_remaining = 2
-        
+
         @CFUNCTYPE(c_void_p, c_int)
         def cb(err):
-            nonlocal original_cb
-            nonlocal lock
-            nonlocal error
-            nonlocal io_remaining
-
             lock.acquire()
             if err:
                 error = err
@@ -47,7 +50,7 @@ class ReplicatedVolume(Volume):
             lock.release()
             if finished:
                 io.callback = original_cb
-                origial_cb(error)
+                io.callback(error)
 
         io.callback = cb
     
