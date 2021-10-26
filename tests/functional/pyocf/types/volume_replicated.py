@@ -1,6 +1,9 @@
 from threading import Lock
 from .volume import Volume, VOLUME_POISON
 from .io import Io
+from ctypes import cast, c_void_p, CFUNCTYPE, c_int, POINTER, memmove, sizeof, pointer
+
+import pdb
 
 class ReplicatedVolume(Volume):
     def __init__(self, primary: Volume, secondary: Volume, uuid = None):
@@ -33,15 +36,26 @@ class ReplicatedVolume(Volume):
     def get_max_io_size(self):
         return self.primary.get_max_io_size()
 
-    def _prepare_io(self, cio):
-        io = Io.get_instance(cio)
-        original_cb = io.callback
+    def _prepare_io(self, io):
+        #pdb.set_trace()
+        original_cb = Io.END()
+        pointer(original_cb)[0] = io.contents._end
+        #memmove(original_cb, io.contents._end, sizeof(io.contents._end))
         lock = Lock()
         error = 0
         io_remaining = 2
 
-        @CFUNCTYPE(c_void_p, c_int)
-        def cb(err):
+        @CFUNCTYPE(None, c_void_p, c_int)
+        def cb(io, err):
+            nonlocal io_remaining
+            nonlocal error
+            nonlocal original_cb
+            nonlocal lock
+
+            #pdb.set_trace()
+
+            io = cast(io, POINTER(Io))
+
             lock.acquire()
             if err:
                 error = err
@@ -49,13 +63,15 @@ class ReplicatedVolume(Volume):
             finished = True if io_remaining == 0 else False
             lock.release()
             if finished:
-                io.callback = original_cb
-                io.callback(error)
+                io.contents._end = original_cb
+                original_cb(io, error)
 
-        io.callback = cb
+
+        io.contents._end = cb
     
     def submit_io(self, io):
         self._prepare_io(io)
+        #pdb.set_trace()
         self.primary.submit_io(io)
         self.secondary.submit_io(io)
 

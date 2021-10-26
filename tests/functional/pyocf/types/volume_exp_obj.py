@@ -1,12 +1,13 @@
-from ctypes import c_int, c_void_p, CFUNCTYPE, byref, c_uint32, c_uint64
+from ctypes import c_int, c_void_p, CFUNCTYPE, byref, c_uint32, c_uint64, cast, POINTER
 
 from ..ocf import OcfLib
 from .volume import Volume, VOLUME_POISON
-from .core import Core
 from pyocf.utils import Size
 from pyocf.types.data import Data
-from pyocf.types.io import IoDir
+from pyocf.types.io import IoDir, Io
 from pyocf.types.shared import OcfCompletion
+
+import pdb
 
 class ExpObjVolume(Volume):
     def __init__(self, cc, uuid = None):
@@ -14,21 +15,28 @@ class ExpObjVolume(Volume):
         self.cc = cc
         self.volume = cc.get_volume()
 
-    def __alloc_io(self, addr, _bytes, _dir_, _class, _flags):
-        queue = self.core.cache.get_default_queue(),  # TODO multiple queues?
-        exp_obj_io = cc.new_io(queue, addr, _bytes, _dir, _class, _flags)
+    def __alloc_io(self, addr, _bytes, _dir, _class, _flags):
+        queue = self.cc.get_default_queue()  # TODO multiple queues?
+        exp_obj_io = self.cc.new_io(queue, addr, _bytes, _dir, _class, _flags)
         return exp_obj_io
 
     def _alloc_io(self, io):
-        exp_obj_io = self.__alloc_io(io.contents_addr, io.contents._bytes,
+        exp_obj_io = self.__alloc_io(io.contents._addr, io.contents._bytes,
                 io.contents._dir, io.contents._class, io.contents._flags)
 
-        exp_obj_io.set_data(io.data)
+        lib = OcfLib.getInstance()
+        cdata = OcfLib.getInstance().ocf_io_get_data(io)
+        data = Data.get_instance(cdata)
+        data2 = Data.shallow_copy(data)
+        OcfLib.getInstance().ocf_io_set_data(byref(exp_obj_io), data2, 0)
 
-        @CFUNCTYPE(c_void_p, c_int)
         def cb(error):
             nonlocal io
-            io.callback(error)
+
+            #pdb.set_trace()
+            io = cast(io, POINTER(Io))
+            io.contents._end(io, error)
+            #TODO: delete io?
 
         exp_obj_io.callback = cb
 
@@ -41,8 +49,8 @@ class ExpObjVolume(Volume):
         return OcfLib.getInstance().ocf_volume_get_max_io_size(self.volume)
 
     def submit_io(self, io):
-        io = self._alloc_io(flush)
-        io.submit_io()
+        io = self._alloc_io(io)
+        io.submit()
 
     def submit_flush(self, flush):
         io = self._alloc_io(flush)
@@ -87,3 +95,5 @@ lib.ocf_volume_get_max_io_size.restype = c_uint32
 lib.ocf_volume_get_length.argtypes = [c_void_p]
 lib.ocf_volume_get_length.restype = c_uint64
 
+lib.ocf_io_get_data.argtypes = [POINTER(Io)]
+lib.ocf_io_get_data.restype = c_void_p
