@@ -1,6 +1,6 @@
 from threading import Lock
 from .volume import Volume, VOLUME_POISON
-from .io import Io
+from .io import Io, IoDir
 from ctypes import cast, c_void_p, CFUNCTYPE, c_int, POINTER, memmove, sizeof, pointer
 
 import pdb
@@ -51,9 +51,6 @@ class ReplicatedVolume(Volume):
             nonlocal error
             nonlocal original_cb
             nonlocal lock
-
-            #pdb.set_trace()
-
             io = cast(io, POINTER(Io))
 
             lock.acquire()
@@ -64,16 +61,21 @@ class ReplicatedVolume(Volume):
             lock.release()
             if finished:
                 io.contents._end = original_cb
+                #pdb.set_trace()
                 original_cb(io, error)
 
 
         io.contents._end = cb
     
     def submit_io(self, io):
-        self._prepare_io(io)
-        #pdb.set_trace()
-        self.primary.submit_io(io)
-        self.secondary.submit_io(io)
+        if io.contents._dir == IoDir.WRITE:
+            self._prepare_io(io)
+            self.primary.submit_io(io)
+            self.secondary.submit_io(io)
+        else:
+            # for read just pass through down to primary
+            # with original completion
+            self.primary.submit_io(io)
 
     def submit_flush(self, flush):
         self._prepare_io(flush)
@@ -81,6 +83,7 @@ class ReplicatedVolume(Volume):
         self.secondary.submit_flush(flush)
 
     def submit_discard(self, discard):
+        pdb.set_trace()
         self._prepare_io(discard)
         self.primary.submit_discard(discard)
         self.secondary.submit_discard(discard)
