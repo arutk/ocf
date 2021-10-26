@@ -229,6 +229,8 @@ static int metadata_io_do(struct ocf_request *req)
 	struct ocf_io *io;
 	int ret;
 
+	ctx_data_seek(cache->owner, m_req->data, ctx_data_seek_begin, 0);
+
 	/* Fill with the latest metadata. */
 	if (m_req->req.rw == OCF_WRITE) {
 		ocf_metadata_start_shared_access(&cache->metadata.lock,
@@ -249,7 +251,6 @@ static int metadata_io_do(struct ocf_request *req)
 
 	/* Setup IO */
 	ocf_io_set_cmpl(io, m_req, NULL, metadata_io_io_cmpl);
-	ctx_data_seek(cache->owner, m_req->data, ctx_data_seek_begin, 0);
 	ret = ocf_io_set_data(io, m_req->data, 0);
 	if (ret) {
 		ocf_io_put(io);
