@@ -26,9 +26,9 @@ class ExpObjVolume(Volume):
 
         lib = OcfLib.getInstance()
         cdata = OcfLib.getInstance().ocf_io_get_data(io)
-        data = Data.get_instance(cdata)
-        data2 = Data.shallow_copy(data)
-        OcfLib.getInstance().ocf_io_set_data(byref(exp_obj_io), data2, 0)
+        #data = Data.get_instance(cdata)
+        #data2 = Data.shallow_copy(data)
+        OcfLib.getInstance().ocf_io_set_data(byref(exp_obj_io), cdata, 0)
 
         def cb(error):
             nonlocal io
