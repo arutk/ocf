@@ -224,6 +224,28 @@ class Cache:
 
         self.started = True
 
+    def failover_detach():
+        self.write_lock()
+        c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
+        self.owner.lib.ocf_mngt_cache_failover_detach(self, c, None)
+        c.wait()
+        self.write_unlock()
+
+        if c.results["error"]:
+            raise OcfError("Failed to detach failover cache device", c.results["error"])
+
+    def activate(self, volume):
+        self.configure_device(volume, perform_test=False)
+        self.write_lock() 
+        c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
+        self.owner.lib.ocf_mngt_cache_activate(
+                self.cache_handle, byref(self.device_cfg), c, None)
+        c.wait()
+        self.write_unlock()
+
+        if c.results["error"]:
+            raise OcfError("Failed to activate standby cache", c.results["error"])
+
     def change_cache_mode(self, cache_mode: CacheMode):
         self.write_lock()
         status = self.owner.lib.ocf_mngt_cache_set_mode(self.cache_handle, cache_mode)
@@ -426,12 +448,11 @@ class Cache:
             raise OcfError("Error adding partition to cache", status)
 
     def configure_device(
-        self, device, force=False, perform_test=True, cache_line_size=None
-    ):
+            self, device, perform_test=True):
         self.device = device
         self.device_name = device.uuid
 
-        device_config = CacheDeviceConfig(
+        self.device_config = CacheDeviceConfig(
             _uuid=Uuid(
                 _data=cast(
                     create_string_buffer(self.device_name.encode("ascii")), c_char_p
@@ -443,8 +464,15 @@ class Cache:
             _volume_params=None,
         )
 
-        self.dev_cfg = CacheAttachConfig(
-            _device=device_config,
+
+
+    def configure_attach(
+        self, device, force=False, perform_test=True, cache_line_size=None
+    ):
+        self.configure_device(device, perform_test)
+
+        self.attach_cfg = CacheAttachConfig(
+            _device=self.device_config,
             _cache_line_size=cache_line_size
             if cache_line_size
             else self.cache_line_size,
@@ -456,18 +484,18 @@ class Cache:
     def _attach_device(
         self, device, standby = False, force=False, perform_test=False, cache_line_size=None
     ):
-        self.configure_device(device, force, perform_test, cache_line_size)
+        self.configure_attach(device, force, perform_test, cache_line_size)
         self.write_lock()
 
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
 
         if not standby:
             self.owner.lib.ocf_mngt_cache_attach(
-                self.cache_handle, byref(self.dev_cfg), c, None
+                self.cache_handle, byref(self.attach_cfg), c, None
             )
         else:
             self.owner.lib.ocf_mngt_cache_standby(
-                self.cache_handle, byref(self.dev_cfg), c, None
+                self.cache_handle, byref(self.attach_cfg), c, None
             )
 
 
@@ -499,10 +527,10 @@ class Cache:
             raise OcfError("Attaching cache device failed", c.results["error"])
 
     def load_cache(self, device):
-        self.configure_device(device)
+        self.configure_attach(device)
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
         self.owner.lib.ocf_mngt_cache_load(
-            self.cache_handle, byref(self.dev_cfg), c, None
+            self.cache_handle, byref(self.attach_cfg), c, None
         )
 
         c.wait()
@@ -815,4 +843,3 @@ lib.ocf_volume_new_io.argtypes = [
     c_uint64,
 ]
 lib.ocf_volume_new_io.restype = c_void_p
-
