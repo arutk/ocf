@@ -174,7 +174,7 @@ class Volume:
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
-        volume.submit_io(io_structure)
+        volume.submit_io_check_offline(io_structure)
 
     @staticmethod
     @VolumeOps.SUBMIT_FLUSH
@@ -184,7 +184,7 @@ class Volume:
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
-        volume.submit_flush(io_structure)
+        volume.submit_flush_check_offline(io_structure)
 
     @staticmethod
     @VolumeOps.SUBMIT_METADATA
@@ -199,7 +199,7 @@ class Volume:
             OcfLib.getInstance().ocf_io_get_volume(io_structure)
         )
 
-        volume.submit_discard(io_structure)
+        volume.submit_discard_check_offline(io_structure)
 
     @staticmethod
     @VolumeOps.SUBMIT_WRITE_ZEROES
@@ -278,6 +278,7 @@ class Volume:
 
         self.type_id = Volume.volume_type_ids[self.__class__]
         self.opened = False
+        self.offlined = False
 
     def open(self):
         self.opened = True
@@ -312,6 +313,34 @@ class Volume:
 
     def md5(self):
         pass
+
+    def offline(self):
+        self.offlined = True
+
+    def online(self):
+        self.offlined = False
+
+    def _reject_io(self, io):
+        cast(io, POINTER(Io)).contents._end(io, -OcfErrorCode.OCF_ERR_IO)
+
+    def submit_flush_check_offline(self, io):
+        if self.offlined:
+            self._reject_io(io)
+        else:
+            self.submit_flush(io)
+
+    def submit_io_check_offline(self, io):
+        if self.offlined:
+            self._reject_io(io)
+        else:
+            self.submit_io(io)
+
+    def submit_discard_check_offline(self, io):
+        if self.offlined:
+            self._reject_io(io)
+        else:
+            self.submit_discard(io)
+
 
 class RamVolume(Volume):
     props = None
