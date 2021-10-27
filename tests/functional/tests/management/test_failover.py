@@ -48,5 +48,9 @@ def test_setup_failover(pyocf_2_ctx):
     core1 = Core.using_device(prim_core_backend_vol)
     cache1.add_core(core1)
 
+    cache1_cache_vol.offline()
+    cache1.stop()
 
+    cache2.failover_detach()
+    cache2.activate(sec_cache_backend_vol)
 
