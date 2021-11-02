@@ -28,7 +28,11 @@ ifneq ($(strip $(OCF_ENV)),)
 ifeq ($(strip $(OCF_ENV)),posix)
 OCF_ENV_DIR=$(PWD)/env/posix
 else
+ifeq ($(strip $(OCF_ENV)),windows)
+OCF_ENV_DIR=$(PWD)/env/windows
+else
 $(error Invalid environment selected)
+endif
 endif
 endif
 
