@@ -2,7 +2,6 @@
 # Copyright(c) 2019-2021 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 #
-SHELL=/bin/bash
 OSTYPE=$(shell echo $$OSTYPE)
 # true for MinGW, Win-Builds, git bash
 MSYS=$(shell [[ $$OSTYPE == msys* ]] && echo "yes")
@@ -17,7 +16,9 @@ ADAPTERDIR=pyocf
 SRCDIR=$(ADAPTERDIR)/ocf/src
 INCDIR=$(ADAPTERDIR)/ocf/include
 WRAPDIR=$(ADAPTERDIR)/wrappers
-SRC=$(shell find $(SRCDIR) $(WRAPDIR) -name \*.c)
+# TODO: this should be achieved by setting SHELL=/bin/bash
+# rather than explicitly calling bash binary
+SRC=$(shell bash -c "find $(SRCDIR) $(WRAPDIR) -name \*.c")
 
 # target objs and library path - relative to makefile
 # to work as makefile targets
@@ -52,9 +53,9 @@ $(OCFLIB): $(OBJS)
 sync:
 	@echo "Syncing OCF sources"
 	@mkdir -p $(INSTALDIR)
-	#@bash -c "$(MAKE) -C $(OCFDIR) inc O=$(INSTALDIR)"
-	#@bash -c "$(MAKE) -C $(OCFDIR) src O=$(INSTALDIR)"
-	#@bash -c "$(MAKE) -C $(OCFDIR) env O=$(INSTALDIR) OCF_ENV=windows"
+	@bash -c "$(MAKE) -C $(OCFDIR) inc O=$(INSTALDIR)"
+	@bash -c "$(MAKE) -C $(OCFDIR) src O=$(INSTALDIR)"
+	@bash -c "$(MAKE) -C $(OCFDIR) env O=$(INSTALDIR) OCF_ENV=windows"
 
 config_random:
 	@python3 utils/configure_random.py
