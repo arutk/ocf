@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <execinfo.h>
 #include <ocf/ocf.h>
 #include "ocf_env.h"
 #include "data.h"
@@ -185,17 +184,7 @@ static int ctx_logger_print(ocf_logger_t logger, ocf_logger_lvl_t lvl,
  */
 static int ctx_logger_dump_stack(ocf_logger_t logger)
 {
-	void *trace[CTX_LOG_TRACE_DEPTH];
-	char **messages = NULL;
-	int i, size;
-
-	size = backtrace(trace, CTX_LOG_TRACE_DEPTH);
-	messages = backtrace_symbols(trace, size);
-	printf("[stack trace]>>>\n");
-	for (i = 0; i < size; ++i)
-		printf("%s\n", messages[i]);
-	printf("<<<[stack trace]\n");
-	free(messages);
+	env_stack_trace();
 
 	return 0;
 }
