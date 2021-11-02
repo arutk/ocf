@@ -2,7 +2,7 @@
 # Copyright(c) 2019-2021 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 #
-from ctypes import c_void_p, cdll
+from ctypes import c_void_p, CDLL
 import inspect
 import os
 
@@ -12,13 +12,11 @@ class OcfLib:
 
     @classmethod
     def getInstance(cls):
+        ddd = os.path.dirname(inspect.getfile(inspect.currentframe()))
+        ppp = os.path.join(ddd, "libocf.so")
         if cls.__lib__ is None:
-            lib = cdll.LoadLibrary(
-                os.path.join(
-                    os.path.dirname(inspect.getfile(inspect.currentframe())),
-                    "libocf.so",
-                )
-            )
+            # https://stackoverflow.com/questions/58631512/pywin32-and-python-3-8-0/58632354#58632354
+            lib = CDLL(ppp, winmode = 0)
             lib.ocf_volume_get_uuid.restype = c_void_p
             lib.ocf_volume_get_uuid.argtypes = [c_void_p]
 
