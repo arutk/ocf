@@ -4,8 +4,8 @@
 #
 
 PWD=$(shell pwd)
-OCFDIR=$(PWD)/../../
-ADAPTERDIR=$(PWD)/pyocf
+OCFDIR=/../../
+ADAPTERDIR=./pyocf
 SRCDIR=$(ADAPTERDIR)/ocf/src
 INCDIR=$(ADAPTERDIR)/ocf/include
 WRAPDIR=$(ADAPTERDIR)/wrappers
@@ -13,13 +13,12 @@ WRAPDIR=$(ADAPTERDIR)/wrappers
 CC=gcc
 CFLAGS=-g -Wall -I$(INCDIR) -I$(SRCDIR)/ocf/env
 LDFLAGS=-pthread -lz
-
-SRC=$(shell find $(SRCDIR) $(WRAPDIR) -name \*.c)
+SRC=$(shell find ./pyocf/ocf/src ./pyocf/wrappers  -name \*.c)
 OBJS=$(patsubst %.c, %.o, $(SRC))
 OCFLIB=$(ADAPTERDIR)/libocf.so
 
 all: | sync config_random
-	$(MAKE) $(OCFLIB)
+	@bash -c "$(MAKE) -C $(PWD) $(OCFLIB)"
 
 $(OCFLIB): $(OBJS)
 	@echo "Building $@"
@@ -32,9 +31,9 @@ $(OCFLIB): $(OBJS)
 sync:
 	@echo "Syncing OCF sources"
 	@mkdir -p $(ADAPTERDIR)/ocf
-	@$(MAKE) -C $(OCFDIR) inc O=$(ADAPTERDIR)/ocf
-	@$(MAKE) -C $(OCFDIR) src O=$(ADAPTERDIR)/ocf
-	@$(MAKE) -C $(OCFDIR) env O=$(ADAPTERDIR)/ocf OCF_ENV=posix
+	@bash -c "$(MAKE) -C $(OCFDIR) inc O=$(ADAPTERDIR)/ocf"
+	@bash -c "$(MAKE) -C $(OCFDIR) src O=$(ADAPTERDIR)/ocf"
+	@bash -c "$(MAKE) -C $(OCFDIR) env O=$(ADAPTERDIR)/ocf OCF_ENV=windows"
 
 config_random:
 	@python3 utils/configure_random.py
