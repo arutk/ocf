@@ -752,8 +752,14 @@ class Cache:
 
         c.wait()
         if c.results["error"]:
+            ret = OcfErrorCode(-1 * c.results["error"])
+        else:
+            ret = OcfErrorCode.OCF_OK
+        if ret != OcfErrorCode.OCF_OK and ret != OcfErrorCode.OCF_ERR_WRITE_CACHE:
             self.write_unlock()
             raise OcfError("Failed stopping cache", c.results["error"])
+        else:
+            ret = OcfErrorCode
 
         self.mngt_queue.put()
         del self.io_queues[:]
@@ -762,6 +768,8 @@ class Cache:
         self.write_unlock()
 
         self.owner.caches.remove(self)
+
+        return ret
 
     def flush(self):
         self.write_lock()
