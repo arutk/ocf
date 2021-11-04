@@ -58,7 +58,6 @@ class Core:
     def __init__(
         self,
         device: Volume,
-        try_add: bool,
         name: str = "core",
         seq_cutoff_threshold: int = DEFAULT_SEQ_CUTOFF_THRESHOLD,
         seq_cutoff_promotion_count: int = DEFAULT_SEQ_CUTOFF_PROMOTION_COUNT,
