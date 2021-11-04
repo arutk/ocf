@@ -224,7 +224,7 @@ class Cache:
 
         self.started = True
 
-    def failover_detach():
+    def failover_detach(self):
         self.write_lock()
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
         self.owner.lib.ocf_mngt_cache_failover_detach(self, c, None)
@@ -239,7 +239,7 @@ class Cache:
         self.write_lock() 
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
         self.owner.lib.ocf_mngt_cache_activate(
-                self.cache_handle, byref(self.device_cfg), c, None)
+                self.cache_handle, byref(self.device_config), c, None)
         c.wait()
         self.write_unlock()
 
