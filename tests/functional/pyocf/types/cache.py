@@ -467,7 +467,8 @@ class Cache:
 
 
     def configure_attach(
-        self, device, force=False, perform_test=True, cache_line_size=None
+        self, device, force=False, open_cores = True,
+        perform_test=True, cache_line_size=None
     ):
         self.configure_device(device, perform_test)
 
@@ -477,7 +478,7 @@ class Cache:
             if cache_line_size
             else self.cache_line_size,
             _force=force,
-            _open_cores=True,
+            _open_cores=open_cores,
             _discard_on_start=False,
         )
 
@@ -526,8 +527,8 @@ class Cache:
         if c.results["error"]:
             raise OcfError("Attaching cache device failed", c.results["error"])
 
-    def load_cache(self, device):
-        self.configure_attach(device)
+    def load_cache(self, device, open_cores=True):
+        self.configure_attach(device, open_cores=open_cores)
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
         self.owner.lib.ocf_mngt_cache_load(
             self.cache_handle, byref(self.attach_cfg), c, None
@@ -538,7 +539,7 @@ class Cache:
             raise OcfError("Loading cache device failed", c.results["error"])
 
     @classmethod
-    def load_from_device(cls, device, owner=None, name="cache"):
+    def load_from_device(cls, device, owner=None, name="cache", open_cores = True):
         if owner is None:
             owner = OcfCtx.get_default()
 
@@ -546,7 +547,7 @@ class Cache:
 
         c.start_cache()
         try:
-            c.load_cache(device)
+            c.load_cache(device, open_cores=open_cores)
         except:  # noqa E722
             c.stop()
             raise
