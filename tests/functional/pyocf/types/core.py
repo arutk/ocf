@@ -72,7 +72,7 @@ class Core:
 
     @classmethod
     def using_device(cls, device, **kwargs):
-        c = cls(device=device, try_add=False, **kwargs)
+        c = cls(device=device, **kwargs)
 
         return c
 
