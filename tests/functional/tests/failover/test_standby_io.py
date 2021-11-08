@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from pyocf.types.volume import RamVolume
 from pyocf.types.cache import Cache
+from pyocf.types.queue import Queue
 from pyocf.utils import Size
 from pyocf.types.shared import CacheLineSize
 from pyocf.types.ctx import OcfCtx
@@ -18,7 +19,12 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
     cache_vol = RamVolume(vol_size)
 
     cache = Cache(owner = OcfCtx.get_default(), cache_line_size=cacheline_size)
-    cache.start_cache()
+
+    cache.start_cache(init_default_io_queue = False)
+
+    for i in range(num_jobs):
+        cache.add_io_queue(f"io-queue-{i}")
+
     cache.standby(cache_vol)
 
     r = (
@@ -32,7 +38,7 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
             .qd(qd)
             .time(timedelta(seconds = runtime))
             .time_based()
-            .run()
+            .run(cache.io_queues)
         )
  
 
