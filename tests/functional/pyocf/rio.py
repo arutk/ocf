@@ -54,7 +54,6 @@ class IoGen:
     def __next__(self):
         return self.gen_fcn()
 
-
 @dataclass
 class JobSpec:
     readwrite: ReadWrite = ReadWrite.READ
@@ -67,7 +66,7 @@ class JobSpec:
     qd: int = 1
     size: Size = Size(0)
     io_size: Size = Size(0)
-    target: Volume = None
+    target = None,
     time_based: bool = False
     time: timedelta = None
     continue_on_error: bool = False
@@ -211,7 +210,7 @@ class Rio:
         self.global_jobspec.qd = qd
         return self
 
-    def target(self, target: Volume):
+    def target(self, target):
         self.global_jobspec.target = target
         return self
 
@@ -275,7 +274,7 @@ class Rio:
             jobs = [self.global_jobspec for _ in range(self.global_jobspec.njobs)]
 
         if not queues:
-            queues = [self.global_jobspec.target.cache.get_default_queue()]
+            queues = [self.global_jobspec.target.get_default_queue()]
         queues = cycle(queues)
 
         for job in jobs:
