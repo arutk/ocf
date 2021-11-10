@@ -2562,7 +2562,7 @@ void _ocf_mngt_cache_failover_detach(ocf_cache_t cache,
 
 
 static void _ocf_mngt_cache_activate(ocf_cache_t cache,
-		struct ocf_mngt_cache_device_config *device_cfg,
+		struct ocf_mngt_cache_device_config *device_cfg, bool open_cores,
 		_ocf_mngt_cache_attach_end_t cmpl, void *priv1, void *priv2)
 {
 	struct ocf_cache_attach_context *context;
@@ -2590,7 +2590,7 @@ static void _ocf_mngt_cache_activate(ocf_cache_t cache,
 
 	context->cfg.device = *device_cfg;
 	context->cfg.cache_line_size = cache->metadata.line_size;
-	context->cfg.open_cores = true;
+	context->cfg.open_cores = open_cores;
 	context->cfg.force = false;
 	context->cfg.discard_on_start = false;
 
@@ -2940,7 +2940,7 @@ void ocf_mngt_cache_failover_detach(ocf_cache_t cache,
 }
 
 void ocf_mngt_cache_activate(ocf_cache_t cache,
-		struct ocf_mngt_cache_device_config *cfg,
+		struct ocf_mngt_cache_device_config *cfg, bool open_cores,
 		ocf_mngt_cache_activate_end_t cmpl, void *priv)
 {
 	OCF_CHECK_NULL(cache);
@@ -2952,8 +2952,8 @@ void ocf_mngt_cache_activate(ocf_cache_t cache,
 	if (_ocf_mngt_cache_validate_device_cfg(cfg))
 		OCF_CMPL_RET(cache, priv, -OCF_ERR_INVAL);
 
-	_ocf_mngt_cache_activate(cache, cfg, _ocf_mngt_cache_activate_complete,
-			cmpl, priv);
+	_ocf_mngt_cache_activate(cache, cfg, open_cores,
+			_ocf_mngt_cache_activate_complete, cmpl, priv);
 }
 
 static void ocf_mngt_cache_stop_detached(ocf_cache_t cache,

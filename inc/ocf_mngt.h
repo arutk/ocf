@@ -569,11 +569,12 @@ typedef void (*ocf_mngt_cache_activate_end_t)(ocf_cache_t cache,
  *
  * @param[in] cache Cache handle
  * @param[in] cfg Caching device configuration
+ * @param[in] open_cores Set to force to avoid opening core volumes
  * @param[in] cmpl Completion callback
  * @param[in] priv Completion callback context
  */
 void ocf_mngt_cache_activate(ocf_cache_t cache,
-		struct ocf_mngt_cache_device_config *cfg,
+		struct ocf_mngt_cache_device_config *cfg, bool open_cores,
 		ocf_mngt_cache_activate_end_t cmpl, void *priv);
 
 /* Adding and removing cores */
