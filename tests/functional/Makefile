@@ -8,13 +8,14 @@ OCFDIR=$(PWD)/../../
 ADAPTERDIR=$(PWD)/pyocf
 SRCDIR=$(ADAPTERDIR)/ocf/src
 INCDIR=$(ADAPTERDIR)/ocf/include
-WRAPDIR=$(ADAPTERDIR)/wrappers
+WRAPDIR=$(ADAPTERDIR)/c/wrappers
+HELPDIR=$(ADAPTERDIR)/c/helpers
 
 CC=gcc
 CFLAGS=-g -Wall -I$(INCDIR) -I$(SRCDIR)/ocf/env
 LDFLAGS=-pthread -lz
 
-SRC=$(shell find $(SRCDIR) $(WRAPDIR) -name \*.c)
+SRC=$(shell find $(SRCDIR) $(WRAPDIR) $(HELPDIR) -name \*.c)
 OBJS=$(patsubst %.c, %.o, $(SRC))
 OCFLIB=$(ADAPTERDIR)/libocf.so
 
