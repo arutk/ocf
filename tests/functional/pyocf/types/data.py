@@ -23,6 +23,8 @@ import weakref
 
 from ..utils import print_buffer, Size as S
 
+import pdb
+
 
 class DataSeek(IntEnum):
     BEGIN = 0
@@ -141,29 +143,44 @@ class Data:
     @staticmethod
     @DataOps.READ
     def _read(dst, src, size):
-        return Data.get_instance(src).read(dst, size)
+        try:
+            return Data.get_instance(src).read(dst, size)
+        except Exception as e:
+            print(e);
 
     @staticmethod
     @DataOps.WRITE
     def _write(dst, src, size):
-        return Data.get_instance(dst).write(src, size)
+        try:
+            return Data.get_instance(dst).write(src, size)
+        except Exception as e:
+            print(e);
 
     @staticmethod
     @DataOps.ZERO
     def _zero(dst, size):
-        return Data.get_instance(dst).zero(size)
+        try:
+          return Data.get_instance(dst).zero(size)
+        except Exception as e:
+            print(e);
 
     @staticmethod
     @DataOps.SEEK
     def _seek(dst, seek, size):
-        return Data.get_instance(dst).seek(DataSeek(seek), size)
+        try:
+            return Data.get_instance(dst).seek(DataSeek(seek), size)
+        except Exception as e:
+            print(e);
 
     @staticmethod
     @DataOps.COPY
     def _copy(dst, src, skip, seek, size):
-        return Data.get_instance(dst).copy(
-            Data.get_instance(src), skip, seek, size
-        )
+        try:
+            return Data.get_instance(dst).copy(
+                Data.get_instance(src), skip, seek, size
+            )
+        except Exception as e:
+            print(e);
 
     @staticmethod
     @DataOps.SECURE_ERASE
@@ -171,10 +188,22 @@ class Data:
         Data.get_instance(dst).secure_erase()
 
     def read(self, dst, size):
+        #pdb.set_trace()
+
+        if self.size - self.position < size:
+            pdb.set_trace()
+
         to_read = min(self.size - self.position, size)
+
         memmove(dst, self.handle.value + self.position, to_read)
 
         self.position += to_read
+
+        if to_read < size or to_read == 2:
+            pdb.set_trace()
+
+        #print(f"returning {to_read}")
+        
         return to_read
 
     def write(self, src, size):

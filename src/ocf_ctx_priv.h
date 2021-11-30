@@ -107,6 +107,12 @@ static inline void ctx_data_rd_check(ocf_ctx_t ctx, void *dst,
 {
 	uint32_t read = ctx_data_rd(ctx, dst, src, size);
 
+	if (read != size) {
+		env_dump_stack();
+		printf("size = %u, read = %u \n", size, read);
+		printf("halo????");
+	}
+
 	ENV_BUG_ON(read != size);
 }
 

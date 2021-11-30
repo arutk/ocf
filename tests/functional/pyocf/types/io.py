@@ -28,6 +28,7 @@ class IoDir(IntEnum):
 class IoOps(Structure):
     pass
 
+import pdb
 
 class Io(Structure):
     START = CFUNCTYPE(None, c_void_p)
@@ -35,6 +36,7 @@ class Io(Structure):
     END = CFUNCTYPE(None, c_void_p, c_int)
 
     _instances_ = {}
+    _deleted_ = {}
     _fields_ = [
         ("_addr", c_uint64),
         ("_flags", c_uint64),
@@ -50,8 +52,10 @@ class Io(Structure):
     ]
 
     @classmethod
-    def from_pointer(cls, ref):
+    def from_pointer(cls, ref):#
         c = cls.from_address(ref)
+        if ref != cast(byref(c), c_void_p).value:
+            pdb.set_trace()
         cls._instances_[ref] = c
         OcfLib.getInstance().ocf_io_set_cmpl_wrapper(
             byref(c), None, None, c.c_end
@@ -60,10 +64,22 @@ class Io(Structure):
 
     @classmethod
     def get_instance(cls, ref):
+        k = cast(ref, c_void_p).value
+        d1 = cls._instances_
+        d2 = cls._deleted_
+        if k not in d1:
+            pdb.set_trace()
         return cls._instances_[cast(ref, c_void_p).value]
 
     def del_object(self):
-        del type(self)._instances_[cast(byref(self), c_void_p).value]
+        k = cast(byref(self), c_void_p).value
+        d1 = type(self)._instances_
+        d2 = type(self)._deleted_
+        if k in d1:
+            d2[k] = d1[k]
+            del d1[k]
+        else:
+            pdb.set_trace()
 
     def put(self):
         OcfLib.getInstance().ocf_io_put(byref(self))
@@ -96,6 +112,11 @@ class Io(Structure):
         self.del_object()
 
     def submit(self):
+        k = cast(byref(self), c_void_p).value
+        d1 = type(self)._instances_
+        d2 = type(self)._deleted_
+        if k not in d1:
+            pdb.set_trace()
         return OcfLib.getInstance().ocf_volume_submit_io(byref(self))
 
     def submit_sync(self):

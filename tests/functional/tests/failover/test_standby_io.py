@@ -8,12 +8,13 @@ from pyocf.utils import Size
 from pyocf.types.shared import CacheLineSize
 from pyocf.types.ctx import OcfCtx
 from pyocf.rio import Rio, ReadWrite
+from pyocf.helpers import get_collision_segment_page_location
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 def test_test_standby_io(pyocf_ctx, cacheline_size):
     num_jobs = 8
     qd = 8
-    runtime = 30
+    runtime = 3
 
     vol_size = Size.from_MiB(20)
     cache_vol = RamVolume(vol_size)
@@ -27,6 +28,9 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
 
     cache.standby(cache_vol)
 
+    start, count = get_collision_segment_page_location(cache)
+    print(f"{start} {count} <----")
+
     r = (
             Rio()
             .target(cache)
@@ -38,6 +42,47 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
             .qd(qd)
             .time(timedelta(seconds = runtime))
             .time_based()
+            .run(cache.io_queues)
+        )
+ 
+
+@pytest.mark.parametrize("cacheline_size", CacheLineSize)
+def test_test_standby_io_metadata(pyocf_ctx, cacheline_size):
+    num_jobs = 8
+    qd = 1
+    runtime = 30
+
+    vol_size = Size.from_MiB(200)
+    cache_vol = RamVolume(vol_size)
+
+    cache = Cache(owner = OcfCtx.get_default(), cache_line_size=cacheline_size)
+
+    cache.start_cache(init_default_io_queue = False)
+
+    for i in range(num_jobs):
+        cache.add_io_queue(f"io-queue-{i}")
+
+    cache.standby(cache_vol)
+
+    start, count = get_collision_segment_page_location(cache)
+    io_offset = Size.from_page(start)
+    io_size = Size.from_page(count)
+
+    print(f"{start} {count} <----")
+
+    r = (
+            Rio()
+            .target(cache)
+            .njobs(num_jobs)
+            .readwrite(ReadWrite.RANDWRITE)
+            .size(io_size)
+            .io_size(Size.from_GiB(100))
+            .bs(Size.from_KiB(16))
+            .offset(io_offset)
+            .qd(qd)
+            .time(timedelta(seconds = runtime))
+            .time_based()
+            .norandommap()
             .run(cache.io_queues)
         )
  
