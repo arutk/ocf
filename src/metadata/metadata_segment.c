@@ -143,6 +143,7 @@ void ocf_metadata_flush_segment(ocf_pipeline_t pipeline,
 	ocf_cache_t cache = context->cache;
 
 	ocf_metadata_raw_flush_all(cache, &ctrl->raw_desc[segment],
+			!superblock->active_config_buffer, // pass currently unused
 			ocf_metadata_generic_complete, context);
 }
 

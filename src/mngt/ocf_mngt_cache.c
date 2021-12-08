@@ -2793,6 +2793,7 @@ static void _ocf_mngt_cache_unplug(ocf_cache_t cache, bool stop,
 		/* Just set correct shutdown status */
 		ocf_metadata_set_shutdown_status(cache, ocf_metadata_detached,
 				_ocf_mngt_cache_unplug_complete, context);
+		// implicit superblock flush
 	} else {
 		/* Flush metadata */
 		ocf_metadata_flush_all(cache,

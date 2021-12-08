@@ -32,6 +32,7 @@ struct ocf_metadata_context {
 	void *priv;
 	ocf_pipeline_t pipeline;
 	ocf_cache_t cache;
+	bool flipped;
 	struct ocf_metadata_ctrl *ctrl;
 	struct ocf_metadata_raw segment_copy[metadata_segment_fixed_size_max];
 };

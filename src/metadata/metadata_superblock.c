@@ -321,14 +321,36 @@ static void ocf_metadata_calculate_crc_sb_config(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
+void ocf_metadata_flush_superblock_only_rly_and_flip((ocf_pipeline_t pipeline,
+		void *priv, ocf_pipeline_arg_t arg)
+{
+	struct ocf_metadata_context *context = priv;
+	ocf_cache_t cache = context->cache;
+	struct ocf_metadata_ctrl *ctrl = (struct ocf_metadata_ctrl *)
+			cache->metadata.priv;
+	struct ocf_metadata_segment *superblock =
+		ctrl->segment[metadata_segment_sb_config];
+
+	superblock->active_config_buffer = !superblock->active_config_buffer;
+	context->flipped = true;
+
+	ocf_metadata_raw_flush_all(cache, &ctrl->raw_desc[metadata_segment_sb_config],
+			superblock->filp, // nie interpretowane dla SB
+			ocf_metadata_generic_complete, context);
+
+}
+
 static void ocf_metadata_flush_superblock_finish(ocf_pipeline_t pipeline,
 		void *priv, int error)
 {
 	struct ocf_metadata_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
-	if (error)
+	if (error) {
+		if (context->flipped)
+			superblock->active_config_buffer = !superblock->active_config_buffer;
 		ocf_metadata_error(cache);
+	}
 
 	context->cmpl(context->priv, error);
 	ocf_pipeline_destroy(pipeline);
@@ -365,12 +387,14 @@ struct ocf_pipeline_arg ocf_metadata_flush_sb_calculate_crc_args[] = {
 };
 
 struct ocf_pipeline_arg ocf_metadata_flush_sb_flush_segment_args[] = {
-	OCF_PL_ARG_INT(metadata_segment_sb_config),
 	OCF_PL_ARG_INT(metadata_segment_part_config),
 	OCF_PL_ARG_INT(metadata_segment_core_config),
 	OCF_PL_ARG_INT(metadata_segment_core_uuid),
 	OCF_PL_ARG_TERMINATOR(),
 };
+
+
+
 
 struct ocf_pipeline_properties ocf_metadata_flush_sb_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
@@ -382,6 +406,8 @@ struct ocf_pipeline_properties ocf_metadata_flush_sb_pipeline_props = {
 				ocf_metadata_flush_sb_calculate_crc_args),
 		OCF_PL_STEP_FOREACH(ocf_metadata_flush_segment,
 				ocf_metadata_flush_sb_flush_segment_args),
+		OCF_PL_STEP(ocf_metadata_flush_disk),
+		OCF_PL_STEP(ocf_metadata_flush_superblock_only_rly_and_flip),
 		OCF_PL_STEP(ocf_metadata_flush_disk),
 		OCF_PL_STEP_TERMINATOR(),
 	},
