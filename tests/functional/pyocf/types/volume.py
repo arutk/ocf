@@ -425,6 +425,9 @@ class RamVolume(Volume):
         m.update(string_at(self.data_ptr, self.size))
         return m.hexdigest()
 
+    def get_bytes(self):
+        return string_at(self.data_ptr, self.size)
+
 class ErrorDevice(RamVolume):
     def __init__(self, size, error_sectors: set = None, uuid=None):
         super().__init__(size, uuid)
