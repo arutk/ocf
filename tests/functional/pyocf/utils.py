@@ -189,28 +189,29 @@ class Size:
 
     def __iadd__(self, other):
         self.bytes += other.bytes
-
         return self
 
     def __isub__(self, other):
         self.bytes -= other.bytes
-
         return self
 
     def __imul__(self, other):
         self.bytes *= int(other)
-
         return self
 
     def __itruediv__(self, other):
         self.bytes /= int(other)
-
         return self
 
     def __ifloordir__(self, other):
         self.bytes //= int(other)
-
         return self
+
+    def __eq__(self, other):
+        return self.bytes == other.bytes
+
+    def __lt__(self, other):
+        return self.bytes < other.bytes
 
 
 def print_structure(struct, indent=0):

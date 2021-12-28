@@ -19,7 +19,6 @@ from enum import IntEnum
 from ..ocf import OcfLib
 from .data import Data
 
-
 class IoDir(IntEnum):
     READ = 0
     WRITE = 1
@@ -167,8 +166,8 @@ lib.ocf_io_set_data.restype = c_int
 lib.ocf_volume_submit_io.argtypes = [POINTER(Io)]
 lib.ocf_volume_submit_io.restype = None
 
-lib.ocf_volume_submit_flush.argtypes = [POINTER(Io)] 
+lib.ocf_volume_submit_flush.argtypes = [POINTER(Io)]
 lib.ocf_volume_submit_flush.restype = None
 
-lib.ocf_volume_submit_discard.argtypes = [POINTER(Io)] 
+lib.ocf_volume_submit_discard.argtypes = [POINTER(Io)]
 lib.ocf_volume_submit_discard.restype = None

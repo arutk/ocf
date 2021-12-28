@@ -16,7 +16,6 @@ class ReplicatedVolume(Volume):
         if secondary.get_length() < primary.get_length():
             raise Exception("secondary volume size too small")
 
-   
     def open(self):
         ret = self.primary.open()
         if ret:
