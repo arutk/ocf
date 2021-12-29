@@ -11,7 +11,7 @@
 #include "ocf_logger_priv.h"
 #include "ocf_volume_priv.h"
 
-#define OCF_VOLUME_TYPE_CNT_USER 8
+#define OCF_VOLUME_TYPE_CNT_USER 16
 #define OCF_VOLUME_TYPE_CNT_PRIV 2
 #define OCF_VOLUME_TYPE_MAX_USER OCF_VOLUME_TYPE_CNT_USER
 #define OCF_VOLUME_TYPE_MAX \
