@@ -24,9 +24,9 @@ def test_setup_failover(pyocf_2_ctx):
     mode = CacheMode.WB
     cls = CacheLineSize.LINE_4KiB
 
-    prim_cache_backend_vol = RamVolume(Size.from_MiB(20))
+    prim_cache_backend_vol = RamVolume(Size.from_MiB(50))
     core_backend_vol = RamVolume(Size.from_MiB(1))
-    sec_cache_backend_vol = RamVolume(Size.from_MiB(20))
+    sec_cache_backend_vol = RamVolume(Size.from_MiB(50))
 
     # passive cache with directly on ram disk
     cache2 = Cache(owner=ctx2, cache_mode=mode, cache_line_size=cls)
