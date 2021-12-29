@@ -78,6 +78,11 @@ class CacheAttachConfig(Structure):
         ("_discard_on_start", c_bool),
     ]
 
+class CacheStandbyActivateConfig(Structure):
+    _fields_ = [
+        ("_device", CacheDeviceConfig),
+        ("_open_cores", c_bool),
+    ]
 
 class ConfValidValues:
     promotion_nhit_insertion_threshold_range = range(2, 1000)
@@ -239,11 +244,11 @@ class Cache:
             raise OcfError("Failed to detach failover cache device", c.results["error"])
 
     def activate(self, volume, open_cores=True):
-        self.configure_device(volume, perform_test=False)
+        self.configure_activate(volume, perform_test=False)
         self.write_lock() 
         c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
-        self.owner.lib.ocf_mngt_cache_activate(
-                self.cache_handle, byref(self.device_config), c_bool(open_cores), c, None)
+        self.owner.lib.ocf_mngt_cache_standby_activate(
+                self.cache_handle, byref(self.activate_cfg), c_bool(open_cores), c, None)
         c.wait()
         self.write_unlock()
 
@@ -486,6 +491,14 @@ class Cache:
             _discard_on_start=False,
         )
 
+    def configure_activate(self, device, open_cores = True):
+        self.configure_device(device, perform_test)
+
+        self.activate_cfg = CacheStandbyActivateConfig(
+            _device=self.device_config,
+            _open_cores=open_cores,
+        )
+
     def _attach_device(
         self, device, standby = False, force=False, perform_test=False, cache_line_size=None
     ):
@@ -499,7 +512,7 @@ class Cache:
                 self.cache_handle, byref(self.attach_cfg), c, None
             )
         else:
-            self.owner.lib.ocf_mngt_cache_standby(
+            self.owner.lib.ocf_mngt_cache_standby_attach(
                 self.cache_handle, byref(self.attach_cfg), c, None
             )
 
