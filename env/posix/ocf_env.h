@@ -21,6 +21,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <assert.h>
+#include <execinfo.h>
 #include <semaphore.h>
 #include <errno.h>
 #include <limits.h>
@@ -66,16 +67,6 @@ typedef uint64_t sector_t;
 #define ENV_MEM_NOIO	0
 #define ENV_MEM_ATOMIC	0
 
-/* DEBUGING */
-#define ENV_WARN(cond, fmt...)		printf(fmt)
-#define ENV_WARN_ON(cond)		;
-#define ENV_WARN_ONCE(cond, fmt...)	ENV_WARN(cond, fmt)
-
-#define ENV_BUG()			assert(0)
-#define ENV_BUG_ON(cond)		do { if (cond) ENV_BUG(); } while (0)
-#define ENV_BUILD_BUG_ON(cond)		_Static_assert(!(cond), "static "\
-					"assertion failure")
-
 /* MISC UTILITIES */
 #define container_of(ptr, type, member) ({          \
 	const typeof(((type *)0)->member)*__mptr = (ptr);    \
@@ -83,6 +74,32 @@ typedef uint64_t sector_t;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
 
+/* DEBUGING */
+static void env_dump_stack()
+{
+	void *trace[64];
+	char **messages = NULL;
+	int i, size;
+
+	size = backtrace(trace, ARRAY_SIZE(trace));
+	messages = backtrace_symbols(trace, size);
+	printf("[stack trace]>>>\n");
+	for (i = 0; i < size; ++i)
+		printf("%s\n", messages[i]);
+	printf("<<<[stack trace]\n");
+	free(messages);
+
+
+}
+
+#define ENV_WARN(cond, fmt...)		printf(fmt)
+#define ENV_WARN_ON(cond)		;
+#define ENV_WARN_ONCE(cond, fmt...)	ENV_WARN(cond, fmt)
+
+#define ENV_BUG()			do {env_dump_stack(); assert(0);} while(0)
+#define ENV_BUG_ON(cond)		do { if (cond) ENV_BUG(); } while (0)
+#define ENV_BUILD_BUG_ON(cond)		_Static_assert(!(cond), "static "\
+					"assertion failure")
 /* STRING OPERATIONS */
 #define env_memcpy(dest, dmax, src, slen) ({ \
 		memcpy(dest, src, min(dmax, slen)); \
