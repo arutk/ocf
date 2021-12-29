@@ -12,8 +12,8 @@ WRAPDIR=$(ADAPTERDIR)/c/wrappers
 HELPDIR=$(ADAPTERDIR)/c/helpers
 
 CC=gcc
-CFLAGS=-g -Wall -I$(INCDIR) -I$(SRCDIR)/ocf/env
-LDFLAGS=-pthread -lz
+CFLAGS=-g -Wall -rdynamic -I$(INCDIR) -I$(SRCDIR)/ocf/env
+LDFLAGS=-pthread -lz -rdynamic
 
 SRC=$(shell find $(SRCDIR) $(WRAPDIR) $(HELPDIR) -name \*.c)
 OBJS=$(patsubst %.c, %.o, $(SRC))
