@@ -120,6 +120,9 @@ class Core:
             volume, queue.handle, addr, length, direction, io_class, flags)
         return Io.from_pointer(io)
 
+    def get_default_queue(self):
+        return self.cache.get_default_queue()
+
     def get_stats(self):
         core_info = CoreInfo()
         usage = UsageStats()
