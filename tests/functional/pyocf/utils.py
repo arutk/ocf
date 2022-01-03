@@ -163,6 +163,21 @@ class Size:
     def __eq__(self, other):
         return self.bytes == other.bytes
 
+    def __lt__(self, other):
+        return self.bytes < other.bytes
+
+    def __gt__(self, other):
+        return self.bytes > other.bytes
+
+    def __le__(self, other):
+        return self.bytes <= other.bytes
+
+    def __ge__(self, other):
+        return self.bytes >= other.bytes
+
+    def __ne__(self, other):
+        return self.bytes != other.bytes
+
     def __add__(self, other):
         return Size(self.bytes + other.bytes)
 
@@ -206,12 +221,6 @@ class Size:
     def __ifloordir__(self, other):
         self.bytes //= int(other)
         return self
-
-    def __eq__(self, other):
-        return self.bytes == other.bytes
-
-    def __lt__(self, other):
-        return self.bytes < other.bytes
 
 
 def print_structure(struct, indent=0):
