@@ -207,12 +207,17 @@ def test_failover_passive_first(pyocf_2_ctx):
     assert md5 == core.exp_obj_md5()
 
 def write_vol(cc, data):
-    comp = OcfCompletion([("error", c_int)])
-    io = cc.new_io(cc.get_default_queue(), 0, len(data.get_bytes()), IoDir.WRITE, 0, 0)
-    io.set_data(data)
-    io.callback = comp.callback
-    io.submit()
-    comp.wait()
+    data_size = len(data.get_bytes())
+    subdata_size_max = int(Size.from_MiB(32))
+    for offset in range(0, data_size, subdata_size_max):
+        subdata_size = min(data_size - offset, subdata_size_max)
+        subdata = Data.from_bytes(data.get_bytes(), offset, subdata_size)
+        comp = OcfCompletion([("error", c_int)])
+        io = cc.new_io(cc.get_default_queue(), offset, subdata_size, IoDir.WRITE, 0, 0)
+        io.set_data(subdata)
+        io.callback = comp.callback
+        io.submit()
+        comp.wait()
 
 def test_failover_active_first(pyocf_2_ctx):
     ctx1 = pyocf_2_ctx[0]
@@ -243,7 +248,7 @@ def test_failover_active_first(pyocf_2_ctx):
     # capture a copy of active cache instance data
     data = Data.from_bytes(prim_cache_backend_vol.get_bytes())
     cache_md5 = prim_cache_backend_vol.md5()
-    
+
     # setup standby cache
     sec_cache_backend_vol = RamVolume(Size.from_MiB(150))
     cache2 = Cache(owner=ctx2, cache_mode=mode, cache_line_size=cls)
