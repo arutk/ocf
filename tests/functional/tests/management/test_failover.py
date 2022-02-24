@@ -31,7 +31,7 @@ def test_setup_failover(pyocf_2_ctx):
     # passive cache with directly on ram disk
     cache2 = Cache(owner=ctx2, cache_mode=mode, cache_line_size=cls)
     cache2.start_cache()
-    cache2.standby(sec_cache_backend_vol)
+    cache2.standby_attach(sec_cache_backend_vol)
 
     # volume replicating cache1 ramdisk writes to cache2 cache exported object
     cache2_exp_obj_vol = CacheVolume(cache2)
@@ -53,9 +53,9 @@ def test_setup_failover(pyocf_2_ctx):
     cache1_cache_vol.offline()
     cache1.stop()
 
-    # failover 
-    cache2.failover_detach()
-    cache2.activate(sec_cache_backend_vol, open_cores=False)
+    # failover
+    cache2.standby_detach()
+    cache2.standby_activate(sec_cache_backend_vol, open_cores=False)
 
     # add core explicitly with "try_add" to workaround pyocf limitations
     core = Core(core_backend_vol)
