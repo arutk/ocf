@@ -41,7 +41,7 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
             .time_based()
             .run(cache.io_queues)
         )
- 
+
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 def test_test_standby_io_metadata(pyocf_ctx, cacheline_size):
