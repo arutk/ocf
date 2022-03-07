@@ -37,7 +37,7 @@ def test_setup_failover(pyocf_2_ctx):
     cache2_exp_obj_vol = CacheVolume(cache2)
     cache1_cache_vol = ReplicatedVolume(prim_cache_backend_vol, cache2_exp_obj_vol)
 
-    # active cache 
+    # active cache
     cache1 = Cache.start_on_device(cache1_cache_vol, ctx1, cache_mode=mode, cache_line_size=cls)
     core = Core(core_backend_vol)
     cache1.add_core(core)
@@ -60,5 +60,5 @@ def test_setup_failover(pyocf_2_ctx):
     # add core explicitly with "try_add" to workaround pyocf limitations
     core = Core(core_backend_vol)
     cache2.add_core(core, try_add=True)
-    
+
     assert md5 == core.exp_obj_md5()
