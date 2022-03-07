@@ -19,7 +19,6 @@ from enum import IntEnum
 from ..ocf import OcfLib
 from .data import Data
 
-
 class IoDir(IntEnum):
     READ = 0
     WRITE = 1
