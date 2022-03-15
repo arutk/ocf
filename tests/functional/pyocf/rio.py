@@ -13,7 +13,7 @@ from threading import Thread, Condition, Event
 from copy import deepcopy
 
 from pyocf.utils import Size
-from pyocf.types.volume import Volume
+from pyocf.types.volume import Volume, volume_new_io
 from pyocf.types.io import Io, IoDir
 from pyocf.types.data import Data
 
@@ -152,8 +152,9 @@ class Rio:
                     self.qd_condition.wait_for(lambda: self.qd <= self.jobspec.qd)
 
                 data = Data(self.jobspec.bs)  # TODO pattern and verify
-                io = self.jobspec.target.new_io(
-                    self.queue,
+                vol = self.jobspec.target.get_front_volume()
+                io = volume_new_io(vol,
+                    self.queue.handle,
                     next(iogen),
                     self.jobspec.bs,
                     iodir,
