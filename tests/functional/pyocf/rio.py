@@ -13,7 +13,7 @@ from threading import Thread, Condition, Event
 from copy import deepcopy
 
 from pyocf.utils import Size
-from pyocf.types.volume import Volume, volume_new_io
+from pyocf.types.volume import Volume
 from pyocf.types.io import Io, IoDir
 from pyocf.types.data import Data
 
@@ -152,9 +152,8 @@ class Rio:
                     self.qd_condition.wait_for(lambda: self.qd <= self.jobspec.qd)
 
                 data = Data(self.jobspec.bs)  # TODO pattern and verify
-                vol = self.jobspec.target.get_front_volume()
-                io = volume_new_io(vol,
-                    self.queue.handle,
+                io = self.jobspec.target.new_io(
+                    self.queue,
                     next(iogen),
                     self.jobspec.bs,
                     iodir,
@@ -261,12 +260,12 @@ class Rio:
         self._threads = []
         self.errors = {}
 
-    def run(self, queues=None):
+    def run(self, queues):
         self.run_async(queues)
         self.wait_for_completion()
         return self
 
-    def run_async(self, queues=None):
+    def run_async(self, queues):
         self.clear()
 
         jobs = deepcopy(self.jobs)
@@ -274,8 +273,6 @@ class Rio:
         if not jobs:
             jobs = [self.global_jobspec for _ in range(self.global_jobspec.njobs)]
 
-        if not queues:
-            queues = [self.global_jobspec.target.get_default_queue()]
         queues = cycle(queues)
 
         for job in jobs:

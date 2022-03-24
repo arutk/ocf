@@ -10,8 +10,9 @@ from pyocf.types.cache import (
 from pyocf.types.core import Core
 from pyocf.types.data import Data
 from pyocf.types.io import Io, IoDir
-from pyocf.types.volume import RamVolume, volume_new_io
+from pyocf.types.volume import RamVolume, Volume
 from pyocf.types.volume_cache import CacheVolume
+from pyocf.types.volume_core import CoreVolume
 from pyocf.types.volume_replicated import ReplicatedVolume
 from pyocf.types.shared import (
     OcfError,
@@ -159,6 +160,7 @@ def test_standby_load_after_standby_dirty_shutdown(pyocf_2_ctx):
 
     cache.stop()
 
+import pdb
 def test_failover_passive_first(pyocf_2_ctx):
     ctx1 = pyocf_2_ctx[0]
     ctx2 = pyocf_2_ctx[1]
@@ -175,19 +177,21 @@ def test_failover_passive_first(pyocf_2_ctx):
     cache2.standby_attach(sec_cache_backend_vol)
 
     # volume replicating cache1 ramdisk writes to cache2 cache exported object
-    cache2_exp_obj_vol = CacheVolume(cache2)
+    cache2_exp_obj_vol = CacheVolume(cache2, open=True)
     cache1_cache_vol = ReplicatedVolume(prim_cache_backend_vol, cache2_exp_obj_vol)
 
     # active cache
     cache1 = Cache.start_on_device(cache1_cache_vol, ctx1, cache_mode=mode, cache_line_size=cls)
     core = Core(core_backend_vol)
     cache1.add_core(core)
+    core_vol = CoreVolume(core, open=True)
+    queue = cache1.get_default_queue()
 
     # some I/O
-    r = Rio().target(core).njobs(1).readwrite(ReadWrite.WRITE).size(Size.from_MiB(1)).qd(1).run()
+    r = Rio().target(core_vol).njobs(1).readwrite(ReadWrite.WRITE).size(Size.from_MiB(1)).qd(1).run([queue])
 
     # capture checksum before simulated active host failure
-    md5 = core.exp_obj_md5()
+    md5 = core_vol.md5()
 
     # offline primary cache volume and stop primary cache to simulate active host
     # failure
@@ -203,19 +207,19 @@ def test_failover_passive_first(pyocf_2_ctx):
     # add core explicitly with "try_add" to workaround pyocf limitations
     core = Core(core_backend_vol)
     cache2.add_core(core, try_add=True)
+    core_vol = CoreVolume(core, open=True)
 
-    assert md5 == core.exp_obj_md5()
+    assert md5 == core_vol.md5()
 
-def write_vol(cc, data):
+def write_vol(vol, queue, data):
     data_size = len(data.get_bytes())
     subdata_size_max = int(Size.from_MiB(32))
     for offset in range(0, data_size, subdata_size_max):
         subdata_size = min(data_size - offset, subdata_size_max)
         subdata = Data.from_bytes(data.get_bytes(), offset, subdata_size)
         comp = OcfCompletion([("error", c_int)])
-        io = volume_new_io(
-            cc.get_front_volume(),
-            cc.get_default_queue().handle,
+        io = vol.new_io(
+            queue,
             offset,
             subdata_size,
             IoDir.WRITE,
@@ -264,7 +268,7 @@ def test_failover_active_first(pyocf_2_ctx):
     cache2.standby_attach(sec_cache_backend_vol)
 
     # standby cache exported object volume
-    cache2_exp_obj_vol = CacheVolume(cache2)
+    cache2_exp_obj_vol = CacheVolume(cache2, open=True)
 
     # just to be sure
     assert sec_cache_backend_vol.get_bytes() != prim_cache_backend_vol.get_bytes()
