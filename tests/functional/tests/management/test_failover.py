@@ -101,7 +101,10 @@ def test_standby_load_after_standby_clean_shutdown(pyocf_2_ctx):
 
     cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
     cache.start_cache()
-    cache.standby_load(vol)
+
+    vol.reset_stats()
+    cache.standby_load(vol, perform_test=False)
+    assert vol.get_stats()[IoDir.WRITE] == 0
 
     cache.stop()
 
@@ -118,7 +121,10 @@ def test_standby_load_after_active_clean_shutdown(pyocf_2_ctx):
 
     cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
     cache.start_cache()
-    cache.standby_load(vol)
+
+    vol.reset_stats()
+    cache.standby_load(vol, perform_test=False)
+    assert vol.get_stats()[IoDir.WRITE] == 0
 
 
 # standby load from active cache instance after clean shutdown
@@ -138,7 +144,9 @@ def test_standby_load_after_active_dirty_shutdown(pyocf_2_ctx):
 
     cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
     cache.start_cache()
-    cache.standby_load(vol)
+    vol.reset_stats()
+    cache.standby_load(vol, perform_test=False)
+    assert vol.get_stats()[IoDir.WRITE] == 0
 
     cache.stop()
 
@@ -156,9 +164,30 @@ def test_standby_load_after_standby_dirty_shutdown(pyocf_2_ctx):
     vol.online()
     cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
     cache.start_cache()
+    vol.reset_stats()
+    cache.standby_load(vol, perform_test=False)
+    assert vol.get_stats()[IoDir.WRITE] == 0
+
+    cache.stop()
+
+def test_standby_load_after_standby_dirty_shutdown_with_vol_test(pyocf_2_ctx):
+    ctx = pyocf_2_ctx[1]
+    mode = CacheMode.WB
+    cls = CacheLineSize.LINE_4KiB
+    vol = RamVolume(Size.from_MiB(150))
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
+    cache.standby_attach(vol, force = False)
+    vol.offline()
+    cache.stop()
+
+    vol.online()
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
     cache.standby_load(vol)
 
     cache.stop()
+
 
 import pdb
 def test_failover_passive_first(pyocf_2_ctx):
