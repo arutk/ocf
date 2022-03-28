@@ -244,12 +244,14 @@ def test_failover_active_first(pyocf_2_ctx):
     cache1 = Cache.start_on_device(prim_cache_backend_vol, ctx1, cache_mode=mode, cache_line_size=cls)
     core = Core(core_backend_vol)
     cache1.add_core(core)
+    vol = CoreVolume(core, open=True)
+    queue1 = cache1.get_default_queue()
 
     # some I/O
-    r = Rio().target(core).njobs(1).readwrite(ReadWrite.WRITE).size(Size.from_MiB(1)).qd(1).run()
+    r = Rio().target(vol).njobs(1).readwrite(ReadWrite.WRITE).size(Size.from_MiB(1)).qd(1).run([queue1])
 
     # capture checksum before simulated active host failure
-    data_md5 = core.exp_obj_md5()
+    data_md5 = vol.md5()
 
     prim_cache_backend_vol.offline()
 
@@ -266,6 +268,8 @@ def test_failover_active_first(pyocf_2_ctx):
     cache2 = Cache(owner=ctx2, cache_mode=mode, cache_line_size=cls)
     cache2.start_cache()
     cache2.standby_attach(sec_cache_backend_vol)
+    vol2 = CacheVolume(cache2, open=True)
+    queue = cache2.get_default_queue() 
 
     # standby cache exported object volume
     cache2_exp_obj_vol = CacheVolume(cache2, open=True)
@@ -274,7 +278,7 @@ def test_failover_active_first(pyocf_2_ctx):
     assert sec_cache_backend_vol.get_bytes() != prim_cache_backend_vol.get_bytes()
 
     # write content of active cache volume to passive cache exported obj
-    write_vol(cache2, data)
+    write_vol(vol2, queue, data)
 
     # TODO: why this doesn't work? OCF calls correct completion, but io.c_end() never
     # gets called
@@ -288,9 +292,10 @@ def test_failover_active_first(pyocf_2_ctx):
     cache2.standby_activate(sec_cache_backend_vol, open_cores=False)
     core = Core(core_backend_vol)
     cache2.add_core(core, try_add=True)
+    vol = CoreVolume(core, open=True)
 
     # check data consistency
-    assert data_md5 == core.exp_obj_md5()
+    assert data_md5 == vol.md5()
 
 #def test_cache_line_size_mismatch_standby_load(pyocf_2_ctx):
 
