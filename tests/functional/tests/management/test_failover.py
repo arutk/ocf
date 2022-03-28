@@ -309,9 +309,7 @@ def test_failover_active_first(pyocf_2_ctx):
     # write content of active cache volume to passive cache exported obj
     write_vol(vol2, queue, data)
 
-    # TODO: why this doesn't work? OCF calls correct completion, but io.c_end() never
-    # gets called
-    #assert cache_md5 ==  cache2_exp_obj_vol.md5()
+    assert cache_md5 ==  cache2_exp_obj_vol.md5()
 
     # volumes should have the same data
     assert sec_cache_backend_vol.get_bytes() == prim_cache_backend_vol.get_bytes()
