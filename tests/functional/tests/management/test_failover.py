@@ -188,8 +188,115 @@ def test_standby_load_after_standby_dirty_shutdown_with_vol_test(pyocf_2_ctx):
 
     cache.stop()
 
+def test_standby_activate_single_ctx_load(pyocf_2_ctx):
+    ctx = pyocf_2_ctx[1]
+    mode = CacheMode.WB
+    cls = CacheLineSize.LINE_4KiB
+    vol = RamVolume(Size.from_MiB(150))
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
+    cache.attach_device(vol, force = False)
 
-import pdb
+    core_vol_uuid = str(id(cache))
+    core_vol_size_initial = Size.from_MiB(150)
+    core_vol = RamVolume(core_vol_size_initial, uuid=core_vol_uuid)
+    core = Core(core_vol)
+    cache.add_core(core)
+
+    cache.stop()
+
+    del Volume._uuid_[core_vol.uuid]
+    core_vol = None
+
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
+    cache.standby_load(vol)
+
+    core_vol = RamVolume(2 * core_vol_size_initial, uuid=core_vol_uuid)
+    cache.standby_detach()
+
+    # first attempt to activate with size mismatch
+    with pytest.raises(OcfError) as ex:
+        cache.standby_activate(vol)
+    assert ex.value.error_code == OcfErrorCode.OCF_ERR_CORE_SIZE_MISMATCH
+
+    # second attempt to activate with size mismatch
+    with pytest.raises(OcfError) as ex:
+        cache.standby_activate(vol)
+    assert ex.value.error_code == OcfErrorCode.OCF_ERR_CORE_SIZE_MISMATCH
+
+    del Volume._uuid_[core_vol.uuid]
+    core_vol = None
+    core_vol = RamVolume(core_vol_size_initial, uuid=core_vol_uuid)
+    
+    # attempt to activate with fixed sizE
+    cache.standby_activate(vol)
+
+    cache.stop()
+
+import copy
+
+def test_standby_activate_single_ctx_io(pyocf_2_ctx):
+    ctx = pyocf_2_ctx[1]
+    mode = CacheMode.WB
+    cls = CacheLineSize.LINE_4KiB
+    vol1 = RamVolume(Size.from_MiB(150), uuid="adas2")
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
+    cache.attach_device(vol1, force = False)
+
+    core_vol_uuid = str(id(cache))
+    core_vol_size_initial = Size.from_MiB(150)
+    core_vol = RamVolume(core_vol_size_initial, uuid=core_vol_uuid)
+    core2_vol = RamVolume(core_vol_size_initial)
+    core = Core(core_vol)
+    core2 = Core(core2_vol, name="core2")
+    cache.add_core(core)
+    cache.add_core(core2)
+
+    data = vol1.get_bytes()
+
+    cache.stop()
+
+    vol1 = None
+
+    del Volume._uuid_[core_vol.uuid]
+    core_vol = None
+
+    vol2 = RamVolume(Size.from_MiB(150), uuid="adas1")
+    cache = Cache(owner=ctx, cache_mode=mode, cache_line_size=cls)
+    cache.start_cache()
+    cache.standby_attach(vol2)
+    cache_vol = CacheVolume(cache, open=True)
+
+    write_vol(cache_vol, cache.get_default_queue(), data)
+
+    core_vol = RamVolume(2 * core_vol_size_initial, uuid=core_vol_uuid)
+
+    cache.standby_detach()
+
+    # first attempt to activate with size mismatch
+    with pytest.raises(OcfError) as ex:
+        print(f"#1 clean shutdown bit on disk: {vol2.get_bytes()[0]}")
+        cache.standby_activate(vol2)
+    assert ex.value.error_code == OcfErrorCode.OCF_ERR_CORE_SIZE_MISMATCH
+
+    # second attempt to activate with size mismatch
+    with pytest.raises(OcfError) as ex:
+        print(f"#2 clean shutdown bit on disk: {vol2.get_bytes()[0]}")
+        cache.standby_activate(vol2)
+    assert ex.value.error_code == OcfErrorCode.OCF_ERR_CORE_SIZE_MISMATCH
+
+    del Volume._uuid_[core_vol.uuid]
+    core_vol = None
+    core_vol = RamVolume(core_vol_size_initial, uuid=core_vol_uuid)
+    
+    # attempt to activate with fixed sizE
+    cache.standby_activate(vol2)
+
+
+    cache.stop()
+
 def test_failover_passive_first(pyocf_2_ctx):
     ctx1 = pyocf_2_ctx[0]
     ctx2 = pyocf_2_ctx[1]
@@ -241,11 +348,11 @@ def test_failover_passive_first(pyocf_2_ctx):
     assert md5 == core_vol.md5()
 
 def write_vol(vol, queue, data):
-    data_size = len(data.get_bytes())
+    data_size = len(data)
     subdata_size_max = int(Size.from_MiB(32))
     for offset in range(0, data_size, subdata_size_max):
         subdata_size = min(data_size - offset, subdata_size_max)
-        subdata = Data.from_bytes(data.get_bytes(), offset, subdata_size)
+        subdata = Data.from_bytes(data, offset, subdata_size)
         comp = OcfCompletion([("error", c_int)])
         io = vol.new_io(
             queue,
@@ -289,7 +396,7 @@ def test_failover_active_first(pyocf_2_ctx):
     assert ex.value.error_code == OcfErrorCode.OCF_ERR_WRITE_CACHE
 
     # capture a copy of active cache instance data
-    data = Data.from_bytes(prim_cache_backend_vol.get_bytes())
+    data = prim_cache_backend_vol.get_bytes()
     cache_md5 = prim_cache_backend_vol.md5()
 
     # setup standby cache
