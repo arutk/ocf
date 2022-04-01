@@ -65,9 +65,8 @@ def mngmt_op_surprise_shutdown_test(
     while error_triggered:
         # Start cache device without error injection
         error_io = {IoDir.WRITE: error_io_seq_no}
-        device = ErrorDevice(
-            mngmt_op_surprise_shutdown_test_cache_size, armed=False, error_seq_no=error_io
-        )
+        ramdisk = RamVolume(mngmt_op_surprise_shutdown_test_cache_size)
+        device = ErrorDevice(ramdisk, armed=False, error_seq_no=error_io)
         cache = Cache.start_on_device(device, cache_mode=CacheMode.WB)
 
         if prepare_func:
@@ -276,9 +275,8 @@ def test_surprise_shutdown_start_cache(pyocf_ctx):
     while error_triggered:
         # Start cache device without error injection
         error_io = {IoDir.WRITE: error_io_seq_no}
-        device = ErrorDevice(
-            mngmt_op_surprise_shutdown_test_cache_size, error_seq_no=error_io, armed=True
-        )
+        ramdisk = RamVolume(mngmt_op_surprise_shutdown_test_cache_size)
+        device = ErrorDevice(ramdisk, error_seq_no=error_io, armed=True)
 
         # call tested management function
         status = 0
@@ -325,9 +323,8 @@ def test_surprise_shutdown_stop_cache(pyocf_ctx):
     while error_triggered:
         # Start cache device without error injection
         error_io = {IoDir.WRITE: error_io_seq_no}
-        device = ErrorDevice(
-            mngmt_op_surprise_shutdown_test_cache_size, error_seq_no=error_io, armed=False
-        )
+        ramdisk = RamVolume(mngmt_op_surprise_shutdown_test_cache_size)
+        device = ErrorDevice(ramdisk, error_seq_no=error_io, armed=False)
 
         # setup cache and insert some data
         cache = Cache.start_on_device(device, cache_mode=CacheMode.WB)
@@ -387,9 +384,8 @@ def test_surprise_shutdown_cache_reinit(pyocf_ctx):
     error_triggered = True
     while error_triggered:
         # Start cache device without error injection
-        device = ErrorDevice(
-            mngmt_op_surprise_shutdown_test_cache_size, error_seq_no=error_io, armed=False
-        )
+        ramdisk = RamVolume(mngmt_op_surprise_shutdown_test_cache_size)
+        device = ErrorDevice(ramdisk, error_seq_no=error_io, armed=False)
 
         # start WB
         cache = Cache.start_on_device(device, cache_mode=CacheMode.WB)
