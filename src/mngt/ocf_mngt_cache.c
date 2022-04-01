@@ -308,25 +308,21 @@ static void _ocf_mngt_close_all_uninitialized_cores(
 		struct ocf_cache_attach_context *context)
 {
 	ocf_cache_t cache = context->cache;
+	ocf_core_t core;
 	ocf_volume_t volume;
-	int j, i;
+	ocf_core_id_t core_id;
 
-	for (j = cache->conf_meta->core_count, i = 0; j > 0; ++i) {
-		if (!cache->core[i].added)
-			continue;
-
-		volume = &(cache->core[i].volume);
+	for_each_core(cache, core, core_id) {
+		volume = &core->volume;
 		if (context->cfg.open_cores)
 			ocf_volume_close(volume);
 
-		--j;
+		if (core->seq_cutoff)
+			ocf_core_seq_cutoff_deinit(core);
 
-		if (cache->core[i].seq_cutoff)
-			ocf_core_seq_cutoff_deinit(&cache->core[i]);
-
-		env_free(cache->core[i].counters);
-		cache->core[i].counters = NULL;
-		cache->core[i].added = false;
+		env_free(core->counters);
+		core->counters = NULL;
+		core->added = false;
 	}
 }
 
