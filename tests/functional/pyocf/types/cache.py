@@ -900,6 +900,13 @@ class Cache:
         finally:
             self.read_unlock()
 
+    @classmethod
+    def get_cache_by_name(cls, ctx, cache_name):
+        cache_pointer = c_void_p()
+        return OcfLib.getInstance().ocf_mngt_cache_get_by_name(
+            ctx.ctx_handle, cache_name, byref(cache_pointer)
+        )
+
     # settle all queues accociated with this cache (mngt and I/O)
     def settle(self):
         Queue.settle_many(self.io_queues + [self.mngt_queue])
