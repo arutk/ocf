@@ -14,3 +14,8 @@ def get_collision_segment_page_location(cache):
 def get_collision_segment_size(cache):
     lib = OcfLib.getInstance()
     return int(lib.ocf_get_collision_page_count_helper(cache))
+
+
+def get_composite_volume_type_id():
+    lib = OcfLib.getInstance()
+    return int(lib.ocf_get_composite_volume_type_id_helper())
