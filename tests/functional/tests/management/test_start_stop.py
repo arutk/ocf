@@ -380,15 +380,15 @@ def test_start_cache_same_device(pyocf_ctx, mode, cls):
     """Adding two caches using the same cache device
     Check that OCF does not allow for 2 caches using the same cache device to be started
     """
-
     cache_device = RamVolume(Size.from_MiB(50))
     cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, name="cache1")
     cache.get_stats()
 
     with pytest.raises(OcfError, match="OCF_ERR_NOT_OPEN_EXC"):
-        cache = Cache.start_on_device(
-            cache_device, cache_mode=mode, cache_line_size=cls, name="cache2"
-        )
+        cache2 = Cache(pyocf_ctx, cache_mode=mode, cache_line_size=cls, name="cache2")
+        cache2.start_cache()
+        cache2.attach_device(cache_device, alloc_vol=True)
+
     cache.get_stats()
 
 

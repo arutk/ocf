@@ -458,7 +458,7 @@ class Cache:
         if status:
             raise OcfError("Error adding partition to cache", status)
 
-    def alloc_device_config(self, device, perform_test=True):
+    def alloc_device_config(self, device, perform_test=True, alloc_vol=False):
         uuid = Uuid(
             _data=cast(create_string_buffer(device.uuid.encode("ascii")), c_char_p),
             _size=len(device.uuid) + 1,
@@ -486,12 +486,20 @@ class Cache:
         lib = OcfLib.getInstance().ocf_volume_destroy(cfg._volume)
 
     def attach_device(
-        self, device, force=False, perform_test=False, cache_line_size=None, open_cores=False,
+        self,
+        device,
+        force=False,
+        perform_test=False,
+        cache_line_size=None,
+        open_cores=False,
+        alloc_vol=False,
     ):
         self.device = device
         self.device_name = device.uuid
 
-        device_config = self.alloc_device_config(device, perform_test=perform_test)
+        device_config = self.alloc_device_config(
+            device, perform_test=perform_test, alloc_vol=alloc_vol
+        )
 
         attach_cfg = CacheAttachConfig(
             _device=device_config,
