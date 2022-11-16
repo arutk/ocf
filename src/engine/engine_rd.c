@@ -104,8 +104,6 @@ static void _ocf_read_generic_miss_complete(struct ocf_request *req, int error)
 
 void ocf_read_generic_submit_hit(struct ocf_request *req)
 {
-	env_atomic_set(&req->req_remaining, ocf_engine_io_count(req));
-
 	ocf_submit_cache_reqs(req->cache, req, OCF_READ, 0, req->byte_length,
 		ocf_engine_io_count(req), _ocf_read_generic_hit_complete);
 }

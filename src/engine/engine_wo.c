@@ -42,13 +42,37 @@ static void ocf_read_wo_cache_complete(struct ocf_request *req, int error)
 	ocf_req_put(req);
 }
 
-static void ocf_read_wo_cache_io(struct ocf_request *req, uint64_t offset,
-		uint64_t size)
+static void ocf_read_wo_cache_io(struct ocf_request *req, 
+		uint64_t start_cl_idx, uint64_t start_cl_offset,
+		uint64_t end_cl_idx, uint64_t end_cl_offset)
 {
+	ocf_cache_t cache = req->cache;
+	uint64_t size = (end_cl_idx - start_cl_idx + 1) * ocf_line_size(cache);
+
+	ENV_BUG_ON(start_cl_idx >= ocf_line_sectors(req->cache));
+	ENV_BUG_ON(end_cl_idx > ocf_line_sectors(req->cache));
+	ENV_BUG_ON(start_cl_idx == end_cl_idx && end_cl_offset <= start_cl_offset);
+
+	if (end_cl_offset == 0) {
+		/* end_cl_offset == 0 means that no sectors from cacheline @end_cl_idx are
+		 * read */
+		ENV_BUG_ON(start_cl_idx == end_cl_idx);
+		end_cl_idx--;
+		end_cl_offset = ocf_line_sectors(req->cache);
+	}
+
+	/* size as if I/O was targetting entire cachelines */
+	size = (end_cl_idx - start_cl_idx + 1) * ocf_line_size(cache);
+
+	/* adjust size to consider initial offset */
+	size -= SECTORS_TO_BYTES(start_cl_offset);
+
+	/* adjust size to consider sectors in last cacheline outside I/O range */
+	size -= SECTORS_TO_BYTES(ocf_line_sectors(req->cache) - end_cl_offset);
+
 	OCF_DEBUG_RQ(req, "Submit cache");
 	env_atomic_inc(&req->req_remaining);
-	ocf_submit_cache_reqs(req->cache, req, OCF_READ, offset, size, 1,
-			ocf_read_wo_cache_complete);
+	ocf_submit_cache_seq_io(req->cache, req, OCF_READ, start_cl_idx, start_cl_offset, size);
 }
 
 static int ocf_read_wo_cache_do(struct ocf_request *req)
@@ -58,11 +82,11 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 	uint64_t line;
 	struct ocf_map_info *entry;
 	bool valid = false;
-	bool io = false;
+	bool valid_sequence = false;
 	uint64_t phys_prev, phys_curr = 0;
-	uint64_t io_start = 0;
-	uint64_t offset = 0;
-	uint64_t increment = 0;
+	unsigned io_start_cl_idx = 0;
+	unsigned io_start_cl_offset = ocf_map_line_start_sector(req, 0);
+	unsigned sequence_end = 0;
 
 	env_atomic_set(&req->req_remaining, 1);
 
@@ -80,36 +104,33 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 		phys_prev = phys_curr;
 		if (entry->status != LOOKUP_MISS)
 			phys_curr = entry->coll_idx;
-		if (io && phys_prev + 1 != phys_curr) {
-			ocf_read_wo_cache_io(req, io_start, offset - io_start);
-			io = false;
+		if (valid_sequence && phys_prev + 1 != phys_curr) {
+			ocf_read_wo_cache_io(req, io_start_cl_idx, io_start_cl_offset, line, 0);
+			valid_sequence = false;
 		}
 
 		/* try to seek directly to the last sector */
 		if (entry->status == LOOKUP_MISS) {
 			/* all sectors invalid */
 			i = e + 1;
-			increment = SECTORS_TO_BYTES(e - s + 1);
 			valid = false;
 		}
 		else if (ocf_engine_map_all_sec_valid(req, line)) {
 			/* all sectors valid */
 			i = e + 1;
-			increment = SECTORS_TO_BYTES(e - s + 1);
 			valid = true;
 		} else {
 			/* need to iterate through CL sector by sector */
 			i = s;
 		}
 
+		sequence_end = s;
 		do {
 			if (i <= e) {
 				 valid = metadata_test_valid_one(cache,
 						entry->coll_idx, i);
-				 increment = 0;
 				 do {
 					++i;
-					increment += SECTORS_TO_BYTES(1);
 				 } while (i <= e && metadata_test_valid_one(
 						cache, entry->coll_idx, i)
 						== valid);
@@ -119,20 +140,20 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 					req->lock_idx, entry->core_id,
 					entry->core_line);
 
-			if (io && !valid) {
+			if (valid_sequence && !valid) {
 				/* end of sequential valid region */
-				ocf_read_wo_cache_io(req, io_start,
-						offset - io_start);
-				io = false;
+				ocf_read_wo_cache_io(req, io_start_cl_idx, io_start_cl_offset, line, sequence_end);
+				valid_sequence = false;
 			}
 
-			if (!io && valid) {
+			if (!valid_sequence && valid) {
 				/* beginning of sequential valid region */
-				io = true;
-				io_start = offset;
+				valid_sequence = true;
+				io_start_cl_idx = line;
+				io_start_cl_offset = sequence_end;
 			}
 
-			offset += increment;
+			sequence_end = i;
 
 			if (i <= e) {
 				ocf_hb_cline_prot_lock_rd(&cache->metadata.lock,
@@ -142,8 +163,8 @@ static int ocf_read_wo_cache_do(struct ocf_request *req)
 		} while (i <= e);
 	}
 
-	if (io)
-		ocf_read_wo_cache_io(req, io_start, offset - io_start);
+	if (valid_sequence)
+		ocf_read_wo_cache_io(req, io_start_cl_idx, io_start_cl_offset, line, 0);
 
 	ocf_read_wo_cache_complete(req, 0);
 
