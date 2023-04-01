@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2012-2021 Intel Corporation
+ * Copyright(c) 2012-2022 Intel Corporation
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -27,11 +27,11 @@ static void _ocf_read_generic_hit_complete(struct ocf_request *req, int error)
 	struct ocf_alock *c = ocf_cache_line_concurrency(
 			req->cache);
 
-	if (error)
+	if (error) {
 		req->error |= error;
-
-	if (req->error)
+		ocf_core_stats_cache_error_update(req->core, OCF_READ);
 		inc_fallback_pt_error_counter(req->cache);
+	}
 
 	/* Handle callback-caller race to let only one of the two complete the
 	 * request. Also, complete original request only if this is the last
@@ -41,7 +41,6 @@ static void _ocf_read_generic_hit_complete(struct ocf_request *req, int error)
 		OCF_DEBUG_RQ(req, "HIT completion");
 
 		if (req->error) {
-			ocf_core_stats_cache_error_update(req->core, OCF_READ);
 			ocf_engine_push_req_front_pt(req);
 		} else {
 			ocf_req_unlock(c, req);
@@ -205,11 +204,6 @@ static int _ocf_read_generic_do(struct ocf_request *req)
 	return 0;
 }
 
-static const struct ocf_io_if _io_if_read_generic_resume = {
-	.read = _ocf_read_generic_do,
-	.write = _ocf_read_generic_do,
-};
-
 static const struct ocf_engine_callbacks _rd_engine_callbacks =
 {
 	.resume = ocf_engine_on_resume,
@@ -220,12 +214,11 @@ int ocf_read_generic(struct ocf_request *req)
 	int lock = OCF_LOCK_NOT_ACQUIRED;
 	struct ocf_cache *cache = req->cache;
 
-	ocf_io_start(&req->ioi.io);
 
 	if (env_atomic_read(&cache->pending_read_misses_list_blocked)) {
 		/* There are conditions to bypass IO */
 		req->force_pt = true;
-		ocf_get_io_if(ocf_cache_mode_pt)->read(req);
+		ocf_read_pt(req);
 		return 0;
 	}
 
@@ -233,7 +226,7 @@ int ocf_read_generic(struct ocf_request *req)
 	ocf_req_get(req);
 
 	/* Set resume call backs */
-	req->io_if = &_io_if_read_generic_resume;
+	req->engine_handler = _ocf_read_generic_do;
 	req->engine_cbs = &_rd_engine_callbacks;
 
 	lock = ocf_engine_prepare_clines(req);
@@ -255,7 +248,7 @@ int ocf_read_generic(struct ocf_request *req)
 	} else {
 		ocf_req_clear(req);
 		req->force_pt = true;
-		ocf_get_io_if(ocf_cache_mode_pt)->read(req);
+		ocf_read_pt(req);
 	}
 
 

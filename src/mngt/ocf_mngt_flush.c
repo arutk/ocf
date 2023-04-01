@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2012-2021 Intel Corporation
+ * Copyright(c) 2012-2022 Intel Corporation
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -417,11 +417,6 @@ static int _ofc_flush_container_step(struct ocf_request *req)
 	return 0;
 }
 
-static const struct ocf_io_if _io_if_flush_portion = {
-	.read = _ofc_flush_container_step,
-	.write = _ofc_flush_container_step,
-};
-
 static void _ocf_mngt_flush_container(
 		struct ocf_mngt_cache_flush_context *context,
 		struct flush_container *fc, ocf_flush_containter_coplete_t end)
@@ -443,7 +438,7 @@ static void _ocf_mngt_flush_container(
 	}
 
 	req->info.internal = true;
-	req->io_if = &_io_if_flush_portion;
+	req->engine_handler = _ofc_flush_container_step;
 	req->priv = fc;
 
 	fc->req = req;
@@ -966,18 +961,16 @@ static void _ocf_mngt_deinit_clean_policy(ocf_pipeline_t pipeline, void *priv,
 			_ocf_mngt_cleaning_deinit_complete, context);
 }
 
-static void _ocf_mngt_init_clean_policy(ocf_pipeline_t pipeline, void *priv,
-		ocf_pipeline_arg_t arg)
+static void _ocf_mngt_cleaning_init_complete(void *priv, int error)
 {
-	int result;
 	struct ocf_mngt_cache_set_cleaning_context *context = priv;
+	ocf_pipeline_t pipeline = context->pipeline;
 	ocf_cache_t cache = context->cache;
 	ocf_cleaning_t old_policy = context->old_policy;
 	ocf_cleaning_t new_policy = context->new_policy;
 	ocf_cleaning_t emergency_policy = ocf_cleaning_nop;
 
-	result = ocf_cleaning_initialize(cache, new_policy, 1);
-	if (result) {
+	if (error) {
 		ocf_cache_log(cache, log_info, "Failed to initialize %s cleaning "
 				"policy. Setting %s instead\n",
 				ocf_cleaning_get_name(new_policy),
@@ -991,16 +984,35 @@ static void _ocf_mngt_init_clean_policy(ocf_pipeline_t pipeline, void *priv,
 
 	__set_cleaning_policy(cache, new_policy);
 
-	ocf_refcnt_unfreeze(&cache->cleaner.refcnt);
-	ocf_metadata_end_exclusive_access(&cache->metadata.lock);
+	OCF_PL_NEXT_ON_SUCCESS_RET(pipeline, error);
 
-	OCF_PL_NEXT_ON_SUCCESS_RET(pipeline, result);
+}
+
+static void _ocf_mngt_init_clean_policy(ocf_pipeline_t pipeline, void *priv,
+		ocf_pipeline_arg_t arg)
+{
+	int result;
+	struct ocf_mngt_cache_set_cleaning_context *context = priv;
+	ocf_cache_t cache = context->cache;
+	ocf_cleaning_t new_policy = context->new_policy;
+
+	result = ocf_cleaning_initialize(cache, new_policy, false);
+	if (result) {
+		_ocf_mngt_cleaning_init_complete(context, result);
+	} else {
+		ocf_cleaning_populate(cache, new_policy,
+				_ocf_mngt_cleaning_init_complete, context);
+	}
 }
 
 static void _ocf_mngt_set_cleaning_finish(ocf_pipeline_t pipeline, void *priv,
 		int error)
 {
 	struct ocf_mngt_cache_set_cleaning_context *context = priv;
+	ocf_cache_t cache = context->cache;
+
+	ocf_refcnt_unfreeze(&cache->cleaner.refcnt);
+	ocf_metadata_end_exclusive_access(&cache->metadata.lock);
 
 	context->cmpl(context->priv, error);
 

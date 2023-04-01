@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2012-2021 Intel Corporation
+ * Copyright(c) 2012-2022 Intel Corporation
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -30,8 +30,10 @@
 
 static void _ocf_read_fast_complete(struct ocf_request *req, int error)
 {
-	if (error)
+	if (error) {
 		req->error |= error;
+		ocf_core_stats_cache_error_update(req->core, OCF_READ);
+	}
 
 	if (env_atomic_dec_return(&req->req_remaining)) {
 		/* Not all requests finished */
@@ -43,7 +45,6 @@ static void _ocf_read_fast_complete(struct ocf_request *req, int error)
 	if (req->error) {
 		OCF_DEBUG_RQ(req, "ERROR");
 
-		ocf_core_stats_cache_error_update(req->core, OCF_READ);
 		ocf_engine_push_req_front_pt(req);
 	} else {
 		ocf_req_unlock(ocf_cache_line_concurrency(req->cache), req);
@@ -99,11 +100,6 @@ static int _ocf_read_fast_do(struct ocf_request *req)
 	return 0;
 }
 
-static const struct ocf_io_if _io_if_read_fast_resume = {
-	.read = _ocf_read_fast_do,
-	.write = _ocf_read_fast_do,
-};
-
 int ocf_read_fast(struct ocf_request *req)
 {
 	bool hit;
@@ -113,8 +109,8 @@ int ocf_read_fast(struct ocf_request *req)
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
 
-	/* Set resume io_if */
-	req->io_if = &_io_if_read_fast_resume;
+	/* Set resume handler */
+	req->engine_handler = _ocf_read_fast_do;
 
 	/*- Metadata RD access -----------------------------------------------*/
 
@@ -129,7 +125,6 @@ int ocf_read_fast(struct ocf_request *req)
 	part_has_space = ocf_user_part_has_space(req);
 
 	if (hit && part_has_space) {
-		ocf_io_start(&req->ioi.io);
 		lock = ocf_req_async_lock_rd(
 				ocf_cache_line_concurrency(req->cache),
 				req, ocf_engine_on_resume);
@@ -171,11 +166,6 @@ int ocf_read_fast(struct ocf_request *req)
  *      \/  \/ |_|  |_|\__\___| |_|  \__,_|___/\__| |_|   \__,_|\__|_| |_|
  */
 
-static const struct ocf_io_if _io_if_write_fast_resume = {
-	.read = ocf_write_wb_do,
-	.write = ocf_write_wb_do,
-};
-
 int ocf_write_fast(struct ocf_request *req)
 {
 	bool mapped;
@@ -185,8 +175,8 @@ int ocf_write_fast(struct ocf_request *req)
 	/* Get OCF request - increase reference counter */
 	ocf_req_get(req);
 
-	/* Set resume io_if */
-	req->io_if = &_io_if_write_fast_resume;
+	/* Set resume handler */
+	req->engine_handler = ocf_write_wb_do;
 
 	/*- Metadata RD access -----------------------------------------------*/
 
@@ -201,7 +191,6 @@ int ocf_write_fast(struct ocf_request *req)
 	part_has_space = ocf_user_part_has_space(req);
 
 	if (mapped && part_has_space) {
-		ocf_io_start(&req->ioi.io);
 		lock = ocf_req_async_lock_wr(
 				ocf_cache_line_concurrency(req->cache),
 				req, ocf_engine_on_resume);

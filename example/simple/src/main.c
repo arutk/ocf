@@ -94,7 +94,7 @@ int initialize_cache(ocf_ctx_t ctx, ocf_cache_t *cache)
 	ocf_mngt_cache_config_set_default(&cache_cfg);
 	cache_cfg.metadata_volatile = true;
 
-	/* Cache deivce (volume) configuration */
+	/* Cache device (volume) configuration */
 	type = ocf_ctx_get_volume_type(ctx, VOL_TYPE);
 	ret = ocf_uuid_set_str(&uuid, "cache");
 	if (ret)
@@ -160,6 +160,8 @@ int initialize_cache(ocf_ctx_t ctx, ocf_cache_t *cache)
 	sem_wait(&context.sem);
 	if (ret)
 		goto err_cache;
+
+	ocf_volume_destroy(volume);
 
 	return 0;
 
@@ -258,7 +260,7 @@ void complete_read(struct ocf_io *io, int error)
 {
 	struct volume_data *data = ocf_io_get_data(io);
 
-	printf("WRITE COMPLETE (error: %d)\n", error);
+	printf("READ COMPLETE (error: %d)\n", error);
 	printf("DATA: \"%s\"\n", (char *)data->ptr);
 
 	/* Free data buffer and io */
